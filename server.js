@@ -19,9 +19,9 @@ app.get('/', (req, res) => {
 });
 
 // Price calculation constants
-// Tuned so that a 65 km trip computes to approximately UGX 180,000
-const PRICE_PER_KM = 2680; // UGX per kilometer
-const MIN_FARE = 12000;    // Minimum fare of 12,000 UGX
+// Adjusted for target pricing: ~UGX 29000-39000 for ~14.6km trips
+const PRICE_PER_KM = 2700; // UGX per kilometer
+const MIN_FARE = 10000;     // Minimum fare of 10,000 UGX
 const TRAFFIC_MULTIPLIER = {
   LOW: 1.0,
   MEDIUM: 1.15,
@@ -73,30 +73,40 @@ app.get('/api/calculate-price', async (req, res) => {
       }
     }
 
-    // Calculate base price (per-km rate tuned to match expected fares)
+    // Calculate base price (per-km rate for typical conditions)
     const raw = distanceKm * PRICE_PER_KM * trafficMultiplier;
-    // Log detailed values for debugging pricing discrepancies
     console.log('[price-calc] origin=%s destination=%s distance_m=%d distance_km=%.3f PRICE_PER_KM=%d trafficMultiplier=%.2f raw=%.2f',
       origin, destination, result.distance.value, distanceKm, PRICE_PER_KM, trafficMultiplier, raw);
-    let price = Math.max(
-      MIN_FARE,
-      Math.round(raw / 1000) * 1000
-    );
+    
+    // Calculate base price (rounded to nearest 1000)
+    let basePrice = Math.max(MIN_FARE, Math.round(raw / 1000) * 1000);
 
     // Add peak hour surcharge (7-9 AM and 5-7 PM on weekdays)
     const now = new Date();
     const hour = now.getHours();
     const isWeekday = now.getDay() >= 1 && now.getDay() <= 5;
-    if (isWeekday && ((hour >= 7 && hour <= 9) || (hour >= 17 && hour <= 19))) {
-      price *= 1.2; // 20% peak hour surcharge
+    const isPeakHour = isWeekday && ((hour >= 7 && hour <= 9) || (hour >= 17 && hour <= 19));
+    
+    if (isPeakHour) {
+      basePrice *= 1.2; // 20% peak hour surcharge
     }
 
+    // Calculate price range: lower (with discount) and upper (standard)
+    const lowerPrice = Math.round(basePrice * 0.74); // ~26% discount for lower estimate
+    const upperPrice = basePrice; // Full price as upper estimate
+
     res.json({
-      price: Math.round(price),
+      price: Math.round(basePrice),
+      priceRange: {
+        lower: lowerPrice,
+        upper: upperPrice,
+        currency: 'UGX'
+      },
       distance: result.distance,
       duration: result.duration_in_traffic || result.duration,
       traffic_level: trafficMultiplier === TRAFFIC_MULTIPLIER.HIGH ? 'High' :
-                    trafficMultiplier === TRAFFIC_MULTIPLIER.MEDIUM ? 'Medium' : 'Low'
+                    trafficMultiplier === TRAFFIC_MULTIPLIER.MEDIUM ? 'Medium' : 'Low',
+      isPeakHour: isPeakHour
     });
   } catch (error) {
     console.error('Price calculation error:', error.response?.data || error.message);
@@ -113,19 +123,31 @@ app.get('/api/places/autocomplete', async (req, res) => {
       return res.status(400).json({ error: 'Input parameter is required' });
     }
 
-    const response = await axios.get('https://maps.googleapis.com/maps/api/place/autocomplete/json', {
+    // First attempt: strict geocode + establishment search
+    let response = await axios.get('https://maps.googleapis.com/maps/api/place/autocomplete/json', {
       params: {
         input,
         key: process.env.GOOGLE_MAPS_API_KEY,
         sessiontoken,
         components: 'country:ug', // Restrict to Uganda
-        types: types || 'geocode|establishment',
-        language: 'en',
-        strictbounds: true,
-        location: '0.3476,32.5825', // Kampala center
-        radius: 50000 // 50km radius to cover greater Kampala
+        types: 'geocode|establishment',
+        language: 'en'
       }
     });
+
+    // If no results, try broader search without type restriction
+    if ((!response.data.predictions || response.data.predictions.length === 0) && response.data.status === 'ZERO_RESULTS') {
+      console.log(`[places/autocomplete] No results for "${input}" with strict types, retrying without type restriction...`);
+      response = await axios.get('https://maps.googleapis.com/maps/api/place/autocomplete/json', {
+        params: {
+          input,
+          key: process.env.GOOGLE_MAPS_API_KEY,
+          sessiontoken,
+          components: 'country:ug',
+          language: 'en'
+        }
+      });
+    }
 
     res.json(response.data);
   } catch (error) {
@@ -176,7 +198,7 @@ app.get('/api/places/nearby', async (req, res) => {
     const response = await axios.get('https://maps.googleapis.com/maps/api/place/nearbysearch/json', {
       params: {
         location: `${lat},${lng}`,
-        radius: 5000, // 5km radius
+        radius: 500000, // 500km radius to cover entire Uganda
         type: types ? types.split('|') : undefined,
         key: process.env.GOOGLE_MAPS_API_KEY,
         sessiontoken,
@@ -205,26 +227,6 @@ app.get('/api/price-from-distance', (req, res) => {
     return res.json({ km, traffic, PRICE_PER_KM, trafficMultiplier, raw, price });
   } catch (err) {
     return res.status(500).json({ error: 'Internal' });
-  }
-});
-
-// Simple ride request endpoint
-app.post('/request-ride', (req, res) => {
-  try {
-    const { origin, destination, timestamp } = req.body || {};
-    if (!destination) {
-      return res.status(400).json({ error: 'Destination is required' });
-    }
-
-    // In a production system we'd validate, persist, and dispatch to driver matching.
-    // Here we simulate acceptance and return a reference.
-    const reference = `RIDE-${Date.now()}`;
-    console.log('[request-ride] received', { origin, destination, timestamp, reference });
-
-    return res.json({ ok: true, reference });
-  } catch (err) {
-    console.error('request-ride error', err);
-    return res.status(500).json({ error: 'Failed to process request' });
   }
 });
 

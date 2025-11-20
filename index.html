@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Teleka Taxi | Airport & City Services</title>
-    <link rel="icon" href="/ims/telicon.png" type="image/x-icon">
+    <title>Teleka Taxi | Entebbe International Airport & City Services</title>
+    <link rel="icon" href="ims/1110.png" type="image/x-icon">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
@@ -293,7 +293,7 @@
 
         .hero-content1 h1 {
             padding: 8px 14px;
-            color: var(--secondary); /* orange */
+            color: #f59e0b !important;
             font-weight: 700;
             text-shadow: 0 1px 0 rgba(0,0,0,0.45);
             position: absolute;
@@ -310,6 +310,18 @@
             -webkit-transition: transform 900ms cubic-bezier(.2,.9,.2,1), opacity 600ms ease;
             background-color: rgba(0,0,0,0.18); /* keep subtle overlay for readability */
         }
+
+        .dark-mode .hero-content1 h1 {
+            color: #10b981 !important;
+        }
+        
+
+        @media (max-width: 768px) {
+            .hero-content1 h1 {
+                font-size: 1.6rem;
+            }
+        }
+        
 
         .hero-content1 h1.active {
             transform: translateX(0);
@@ -518,47 +530,8 @@
                 border-radius: 8px;
                 border: 1px solid var(--border);
                 color: var(--text);
+                font-weight: 500;
             }
-
-        
-
-        /* Request Ride Modal + Map */
-        .modal {
-            position: fixed;
-            inset: 0;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 3000;
-        }
-
-        .modal.open { display: flex; }
-
-        .modal-backdrop {
-            position: absolute;
-            inset: 0;
-            background: rgba(0,0,0,0.45);
-        }
-
-        .modal-panel {
-            position: relative;
-            background: var(--bg-secondary);
-            padding: 18px;
-            width: 100%;
-            max-width: 760px;
-            border-radius: 10px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.18);
-            z-index: 3100;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        #requestMap { height: 320px; width: 100%; border-radius: 8px; }
-
-        .modal-actions { display:flex; gap:10px; justify-content:flex-end; }
-
-        .request-info { font-size:0.95rem; color:var(--text-light); }
 
             .price-display.loading {
                 opacity: 0.7;
@@ -601,17 +574,6 @@
 
             .traffic-level[data-level="Low"] {
                 color: #10b981;
-            }
-
-            .request-coords { margin-top: 6px; }
-            #requestPrice {
-                font-size: 1.25rem;
-                font-weight: 700;
-                color: var(--accent);
-                padding: 8px 10px;
-                border-radius: 6px;
-                background: rgba(16,185,129,0.06);
-                display: inline-block;
             }
 
         .booking-image img {
@@ -1139,7 +1101,8 @@
     <!-- Hero Section -->
     <section class="hero" id="home">
         <div class="hero-content1">
-                <h1>Airport Transfers</h1>
+                <h1>Entebbe Airport Transfers</h1>
+                <h1>Book Your Ride Now</h1>
                 <h1>City Rides</h1>
                 <h1>Business Trips</h1>
                 <h1>Tours and Travel</h1>
@@ -1153,7 +1116,7 @@
                 <h1>Reliable Taxi Service for Airport & City Rides</h1>
                 <p>Experience comfortable and timely rides with our professional taxi service. We ensure you reach your destination safely, whether it's the airport or anywhere in the city.</p>
                 <div class="hero-buttons">
-                    <button id="requestRideBtn" class="btn">Request a Ride</button>
+                    <a href="#booking" class="btn">Book a Ride</a>
                     <a href="#services" class="btn btn-outline">Our Services</a>
                 </div>
                 <!-- Removed demo stats -->
@@ -1168,8 +1131,6 @@
             </div>
         </div>
     </section>
-
-    <!-- Modal behavior is handled by the main script; removed duplicate handler to avoid conflicts -->
 
     <!-- Services Section -->
     <section class="services" id="services">
@@ -1219,12 +1180,12 @@
                         <input type="text" id="name" class="form-control" placeholder="Enter your name" required>
                     </div>
                     <div class="form-group">
-                        <label for="email">Email Address</label>
-                        <input type="email" id="email" class="form-control" placeholder="Enter your email" required>
+                        <label for="email">Email Address (Optional)</label>
+                        <input type="email" id="email" class="form-control" placeholder="Enter your email">
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" style="display: none;">
                         <label for="whatsapp">WhatsApp Number</label>
-                        <input type="tel" id="whatsapp" class="form-control" placeholder="Enter WhatsApp number (e.g., 254712345678)" required>
+                        <input type="tel" id="whatsapp" class="form-control" placeholder="Enter WhatsApp number (e.g., 254712345678)">
                     </div>
                     <div class="form-group">
                         <label for="pickup">Pickup Location</label>
@@ -1265,33 +1226,6 @@
             </div>
         </div>
     </section>
-
-    <!-- Request Ride Modal (opens when clicking Request a Ride) -->
-    <div id="requestModal" class="modal" role="dialog" aria-hidden="true" aria-labelledby="requestModalTitle">
-        <div class="modal-backdrop" tabindex="-1"></div>
-        <div class="modal-panel" role="document">
-            <div style="display:flex;justify-content:space-between;align-items:center">
-                <h3 id="requestModalTitle">Request a Ride</h3>
-                <button id="requestModalClose" class="btn btn-outline" aria-label="Close">Close</button>
-            </div>
-            <div class="request-info" id="requestOriginInfo">Detecting your location...</div>
-            <div id="requestMap">Loading map...</div>
-            <div>
-                <label for="requestPickupInput">Pickup (optional)</label>
-                <input id="requestPickupInput" class="form-control" placeholder="Use current location or type pickup address" />
-            </div>
-            <div>
-                <label for="requestDestinationInput">Destination</label>
-                <input id="requestDestinationInput" class="form-control" placeholder="Click on map to set destination" />
-            </div>
-            <div id="requestCoords" class="request-coords" aria-live="polite" style="font-size:0.95rem;color:var(--text-light)"></div>
-            <div id="requestPrice" class="price-display" style="margin-top:6px">Estimated price will appear here after selecting destination</div>
-            <div class="modal-actions">
-                <button id="requestConfirmBtn" class="btn">Confirm & Request</button>
-                <button id="requestCancelBtn" class="btn btn-outline">Cancel</button>
-            </div>
-        </div>
-    </div>
 
     <!-- Features Section -->
     <section class="features" id="features">
@@ -1457,236 +1391,237 @@
         Book Now
     </button>
 
-    <!-- Load our CSS and JS files -->
-    <link rel="stylesheet" href="css/places-autocomplete.css">
-    <script src="js/places-autocomplete.js"></script>
-    <script src="js/places-handler.js"></script>
-
-    <style>
-        /* Inline styles for request modal autocomplete suggestions */
-        .autocomplete-list {
-            position: absolute;
-            z-index: 4000;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            box-shadow: 0 6px 18px rgba(0,0,0,0.12);
-            max-height: 220px;
-            overflow: auto;
-            width: 100%;
-        }
-        .autocomplete-item {
-            padding: 10px 12px;
-            cursor: pointer;
-            border-bottom: 1px solid rgba(0,0,0,0.03);
-            color: var(--text);
-        }
-        .autocomplete-item:hover, .autocomplete-item.active {
-            background: rgba(37,73,235,0.06);
-        }
-    </style>
-
     <script>
-    (function(){
-        // Create an autocomplete instance for a given input id
-        function createAutocomplete(inputId) {
-            const input = document.getElementById(inputId);
-            if (!input) return;
 
-            let container = null;
-            let sessionToken = String(Math.random()).slice(2);
-            let focused = -1;
-            let debounceTimer = null;
+        // ============ NEW AUTOCOMPLETE SYSTEM ============
+        // Handles all typing inputs for pickup & destination with live suggestions
+        (function() {
+            const suggestionCache = {};
 
-            function ensureContainer(){
-                if (container) return container;
-                container = document.createElement('div');
-                container.className = 'autocomplete-list';
-                container.style.display = 'none';
-                container.setAttribute('role','listbox');
-                input.parentElement.style.position = 'relative';
-                input.parentElement.appendChild(container);
-                return container;
+            // Debounce to avoid excessive API calls
+            function debounce(fn, delay = 300) {
+                let timeoutId;
+                return function(...args) {
+                    clearTimeout(timeoutId);
+                    timeoutId = setTimeout(() => fn(...args), delay);
+                };
             }
 
-            async function fetchSuggestions(q){
-                if (!q || q.length < 2) return [];
+            // Fetch suggestions from server
+            async function getSuggestions(query) {
+                if (!query.trim()) return [];
+                
+                // Clean up query - remove extra spaces
+                const cleanQuery = query.trim().replace(/\s+/g, ' ');
+                if (suggestionCache[cleanQuery]) return suggestionCache[cleanQuery];
+
                 try {
-                    const res = await fetch(`/api/places/autocomplete?input=${encodeURIComponent(q)}&sessiontoken=${sessionToken}`);
-                    const data = await res.json();
-                    return data.predictions || [];
-                } catch (e) {
-                    console.warn('Autocomplete fetch failed', e);
+                    const response = await fetch(`/api/places/autocomplete?input=${encodeURIComponent(cleanQuery)}`);
+                    const data = await response.json();
+                    const predictions = data.predictions || [];
+                    
+                    console.log(`Autocomplete "${cleanQuery}": ${predictions.length} results`);
+                    
+                    suggestionCache[cleanQuery] = predictions;
+                    return predictions;
+                } catch (err) {
+                    console.error('Suggestion fetch failed:', err);
                     return [];
                 }
             }
 
-            async function fetchPlaceDetails(place_id){
-                try{
-                    const res = await fetch(`/api/places/details?place_id=${encodeURIComponent(place_id)}&sessiontoken=${sessionToken}`);
-                    const data = await res.json();
-                    return data.result;
-                } catch(e){
-                    console.warn('Place details failed', e);
+            // Get full place details (lat, lng, address)
+            async function getPlaceDetails(placeId) {
+                try {
+                    const response = await fetch(`/api/places/details?place_id=${encodeURIComponent(placeId)}`);
+                    const data = await response.json();
+                    return data.result || null;
+                } catch (err) {
+                    console.error('Place details fetch failed:', err);
                     return null;
                 }
             }
 
-            function render(list){
-                const ct = ensureContainer();
-                ct.innerHTML = '';
-                focused = -1;
-                if (!list || list.length === 0) { ct.style.display = 'none'; return; }
-                list.forEach((p, i) => {
-                    const el = document.createElement('div');
-                    el.className = 'autocomplete-item';
-                    el.textContent = p.description || p.structured_formatting?.main_text || p.description;
-                    el.tabIndex = -1;
-                    el.setAttribute('role','option');
-                    el.addEventListener('click', async () => {
-                        input.value = el.textContent;
-                        ct.style.display = 'none';
-                        // get details and store lat/lng on the input for other scripts
-                        if (p.place_id) {
-                            const details = await fetchPlaceDetails(p.place_id);
-                            if (details && details.geometry && details.geometry.location) {
-                                input.dataset.lat = details.geometry.location.lat;
-                                input.dataset.lng = details.geometry.location.lng;
-                                if (window.updateRequestEstimate) window.updateRequestEstimate();
-                            }
-                        }
-                    });
-                    ct.appendChild(el);
+            // Create dropdown container for suggestions
+            function createDropdown(inputElement) {
+                // Remove any existing dropdown for this input
+                const existing = inputElement.parentElement.querySelector('.suggestions-dropdown');
+                if (existing) existing.remove();
+
+                const dropdown = document.createElement('div');
+                dropdown.className = 'suggestions-dropdown';
+                dropdown.style.cssText = `
+                    position: absolute;
+                    top: 100%;
+                    left: 0;
+                    right: 0;
+                    background: ${document.body.classList.contains('dark-mode') ? '#1f2937' : '#fff'};
+                    border: 1px solid ${document.body.classList.contains('dark-mode') ? '#4b5563' : '#e5e7eb'};
+                    border-radius: 6px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                    max-height: 300px;
+                    overflow-y: auto;
+                    z-index: 1000;
+                    margin-top: 4px;
+                `;
+                inputElement.parentElement.style.position = 'relative';
+                inputElement.parentElement.appendChild(dropdown);
+                return dropdown;
+            }
+
+            // Render suggestion item
+            function renderSuggestion(suggestion, dropdown, inputElement, inputContainer) {
+                const item = document.createElement('div');
+                item.style.cssText = `
+                    padding: 10px 12px;
+                    border-bottom: 1px solid ${document.body.classList.contains('dark-mode') ? '#374151' : '#f3f4f6'};
+                    cursor: pointer;
+                    transition: background 0.15s;
+                    color: ${document.body.classList.contains('dark-mode') ? '#e5e7eb' : '#1f2937'};
+                `;
+                item.innerHTML = `<strong>${suggestion.description}</strong>`;
+
+                item.addEventListener('mouseover', () => {
+                    item.style.background = document.body.classList.contains('dark-mode') ? '#374151' : '#f3f4f6';
                 });
-                ct.style.display = 'block';
+                item.addEventListener('mouseout', () => {
+                    item.style.background = 'transparent';
+                });
+
+                item.addEventListener('click', async () => {
+                    inputElement.value = suggestion.description;
+                    inputElement.dataset.placeName = suggestion.description;
+                    inputElement.dataset.placeId = suggestion.place_id;
+                    dropdown.innerHTML = '';
+
+                    // Fetch full details to get lat/lng
+                    const details = await getPlaceDetails(suggestion.place_id);
+                    if (details && details.geometry && details.geometry.location) {
+                        const { lat, lng } = details.geometry.location;
+                        inputElement.dataset.lat = lat;
+                        inputElement.dataset.lng = lng;
+                        console.log(`Selected ${suggestion.description}: lat=${lat}, lng=${lng}`);
+
+                        // Trigger distance calculation if both inputs are filled
+                        inputContainer.calculateDistance();
+                    }
+                });
+
+                dropdown.appendChild(item);
             }
 
-            input.addEventListener('input', () => {
-                clearTimeout(debounceTimer);
-                debounceTimer = setTimeout(async () => {
-                    const q = input.value.trim();
-                    if (q.length < 2) { ensureContainer().style.display = 'none'; return; }
-                    const preds = await fetchSuggestions(q);
-                    render(preds);
-                }, 250);
-            });
+            // Set up autocomplete for an input
+            function attachAutocomplete(inputId, inputContainer) {
+                const input = document.getElementById(inputId);
+                if (!input) return;
 
-            input.addEventListener('keydown', (e) => {
-                const ct = ensureContainer();
-                const children = ct.querySelectorAll('.autocomplete-item');
-                if (!children || children.length === 0) return;
-                if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    focused = Math.min(focused + 1, children.length - 1);
-                    children.forEach((c, i) => c.classList.toggle('active', i === focused));
-                    children[focused].scrollIntoView({block:'nearest'});
-                } else if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    focused = Math.max(focused - 1, 0);
-                    children.forEach((c, i) => c.classList.toggle('active', i === focused));
-                    children[focused].scrollIntoView({block:'nearest'});
-                } else if (e.key === 'Enter') {
-                    if (focused >= 0 && children[focused]) {
-                        e.preventDefault();
-                        children[focused].click();
+                input.setAttribute('autocomplete', 'off');
+
+                const handleInput = debounce(async (e) => {
+                    const query = e.target.value.trim();
+                    const dropdown = createDropdown(input);
+
+                    if (query.length < 2) {
+                        dropdown.innerHTML = '';
+                        return;
                     }
-                } else if (e.key === 'Escape') {
-                    ct.style.display = 'none';
-                }
-            });
 
-            document.addEventListener('click', (e) => {
-                const ct = container;
-                if (!ct) return;
-                if (e.target === input || input.contains(e.target) || ct.contains(e.target)) return;
-                ct.style.display = 'none';
-            });
-        }
+                    const suggestions = await getSuggestions(query);
+                    dropdown.innerHTML = '';
 
-        // Initialize autocomplete for pickup and destination fields (if present)
-        try { createAutocomplete('requestPickupInput'); } catch (e) { /* ignore */ }
-        try { createAutocomplete('requestDestinationInput'); } catch (e) { /* ignore */ }
+                    if (suggestions.length === 0) {
+                        dropdown.innerHTML = '<div style="padding:10px; color:#999;">No suggestions found</div>';
+                        return;
+                    }
 
-        // Also listen for manual coordinate entry (e.g "0.3476, 32.5825")
-        function attachManualCoordHandler(id) {
-            const el = document.getElementById(id);
-            if (!el) return;
-            el.addEventListener('blur', async () => {
-                const v = el.value && el.value.trim();
-                if (!v) return;
-                if (v.includes(',')) {
-                    const parts = v.split(',').map(p => parseFloat(p.trim()));
-                    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-                        el.dataset.lat = parts[0];
-                        el.dataset.lng = parts[1];
-                        console.log('Manual coords set on', id, ':', parts);
-                        if (window.updateRequestEstimate) {
-                            await window.updateRequestEstimate();
+                    suggestions.slice(0, 8).forEach(s => {
+                        renderSuggestion(s, dropdown, input, inputContainer);
+                    });
+                }, 400);
+
+                input.addEventListener('input', handleInput);
+                input.addEventListener('focus', () => {
+                    if (input.value.trim()) handleInput({ target: input });
+                });
+
+                input.addEventListener('blur', () => {
+                    setTimeout(() => {
+                        const dropdown = input.parentElement.querySelector('.suggestions-dropdown');
+                        if (dropdown) dropdown.remove();
+                    }, 150);
+                });
+            }
+
+            // Main container for booking form inputs
+            const BookingForm = {
+                init() {
+                    attachAutocomplete('pickup', this);
+                    attachAutocomplete('destination', this);
+                },
+
+                calculateDistance: debounce(async function() {
+                    const pickupInput = document.getElementById('pickup');
+                    const destInput = document.getElementById('destination');
+                    const priceDisplay = document.getElementById('priceDisplay');
+
+                    const pickupLat = pickupInput.dataset.lat;
+                    const pickupLng = pickupInput.dataset.lng;
+                    const destLat = destInput.dataset.lat;
+                    const destLng = destInput.dataset.lng;
+
+                    if (!pickupLat || !pickupLng || !destLat || !destLng) {
+                        if (priceDisplay) priceDisplay.textContent = 'Select both pickup and destination to see price';
+                        return;
+                    }
+
+                    try {
+                        if (priceDisplay) priceDisplay.textContent = 'Calculating...';
+
+                        const response = await fetch(
+                            `/api/calculate-price?origin=${pickupLat},${pickupLng}&destination=${destLat},${destLng}`
+                        );
+                        const data = await response.json();
+
+                        if (data.error) throw new Error(data.error);
+
+                        // Format prices - show range
+                        const lowerPrice = new Intl.NumberFormat('en-UG', {
+                            style: 'currency',
+                            currency: 'UGX',
+                            minimumFractionDigits: 0
+                        }).format(data.priceRange.lower);
+
+                        const upperPrice = new Intl.NumberFormat('en-UG', {
+                            style: 'currency',
+                            currency: 'UGX',
+                            minimumFractionDigits: 0
+                        }).format(data.priceRange.upper);
+
+                        const distanceKm = (data.distance.value / 1000).toFixed(1);
+                        const durationMin = Math.round(data.duration.value / 60);
+                        const peakHourNote = data.isPeakHour ? ' <span style="color: #f59e0b;">(Peak Hour)</span>' : '';
+
+                        if (priceDisplay) {
+                            priceDisplay.innerHTML = `
+                                <div style="font-size: 1.3rem; font-weight: 700; color: #10b981; margin-bottom: 8px;">
+                                    ${lowerPrice} - ${upperPrice}
+                                </div>
+                                <div style="font-size: 0.85rem; color: var(--text-light);">
+                                    Distance: ${distanceKm} km | Duration: ${durationMin} min | Traffic: ${data.traffic_level}${peakHourNote}
+                                </div>
+                            `;
                         }
+                    } catch (error) {
+                        console.error('Distance calculation failed:', error);
+                        if (priceDisplay) priceDisplay.textContent = 'Error calculating price. Try different locations.';
                     }
-                }
-            });
-        }
+                }, 500)
+            };
 
-        try { attachManualCoordHandler('requestPickupInput'); } catch (e) { /* ignore */ }
-        try { attachManualCoordHandler('requestDestinationInput'); } catch (e) { /* ignore */ }
-    })();
-    </script>
+            window.BookingForm = BookingForm;
+        })();
 
-    <script>
-        // Cache utils for places
-        const PlacesCache = {
-            KEY: 'teleka_recent_places',
-            MAX_ITEMS: 5,
-            DURATION: 7 * 24 * 60 * 60 * 1000, // 7 days
-
-            load() {
-                try {
-                    const cached = localStorage.getItem(this.KEY);
-                    if (!cached) return [];
-                    const { items, timestamp } = JSON.parse(cached);
-                    if (Date.now() - timestamp > this.DURATION) {
-                        localStorage.removeItem(this.KEY);
-                        return [];
-                    }
-                    return items;
-                } catch (e) {
-                    console.warn('Error loading recent places:', e);
-                    return [];
-                }
-            },
-
-            save(place) {
-                try {
-                    const recent = this.load();
-                    const newPlace = {
-                        id: place.place_id || place.description,
-                        description: place.description || place.formatted_address || place.name,
-                        main_text: place.structured_formatting?.main_text || place.name,
-                        secondary_text: place.structured_formatting?.secondary_text || '',
-                        timestamp: Date.now()
-                    };
-
-                    const updated = [newPlace, ...recent.filter(p => p.id !== newPlace.id)]
-                        .slice(0, this.MAX_ITEMS);
-
-                    localStorage.setItem(this.KEY, JSON.stringify({
-                        items: updated,
-                        timestamp: Date.now()
-                    }));
-                } catch (e) {
-                    console.warn('Error saving recent place:', e);
-                }
-            },
-
-            filter(query) {
-                return this.load().filter(place => 
-                    place.description.toLowerCase().includes(query.toLowerCase()) ||
-                    place.main_text.toLowerCase().includes(query.toLowerCase())
-                );
-            }
-        };
-
+        // ============ THEME TOGGLE ============
         // Theme Toggle with localStorage persistence
         const THEME_KEY = 'theme-preference';
         
@@ -1972,6 +1907,7 @@
             if (!slides || slides.length === 0) return;
             let idx = 0;
             slides[idx].classList.add('active');
+            console.log('Image hero slideshow started with', slides.length, 'slides');
 
             setInterval(() => {
                 slides[idx].classList.remove('active');
@@ -1982,16 +1918,12 @@
 
         // Initialize components
         document.addEventListener('DOMContentLoaded', () => {
-            // Initialize places autocomplete (defensive: don't break if module missing)
-                try {
-                    if (window.PlacesAutocomplete && typeof PlacesAutocomplete.init === 'function') {
-                        PlacesAutocomplete.init('pickup', 'destination');
-                    } else {
-                        console.warn('PlacesAutocomplete not available; skipping init');
-                    }
-                } catch (e) {
-                    console.warn('PlacesAutocomplete init failed:', e);
-                }
+            // Initialize new booking form with autocomplete and distance calculation
+            BookingForm.init();
+            
+            // Listen for input changes to trigger distance calculation
+            document.getElementById('pickup')?.addEventListener('change', () => BookingForm.calculateDistance());
+            document.getElementById('destination')?.addEventListener('change', () => BookingForm.calculateDistance());
 
             // Animated, colorful hero-content1 headings
             (function() {
@@ -2000,13 +1932,8 @@
                 const items = Array.from(container.querySelectorAll('h1'));
                 if (!items.length) return;
 
-                const colors = [
-                    '#2549eb', // blue
-                    '#10b981', // green
-                    '#f59e0b', // amber
-                    '#ef4444', // red
-                    '#8b5cf6'  // violet
-                ];
+                // Use a single orange color for all hero heading slides
+                const colors = ['#f59e0b'];
 
                 let idx = -1;
                 const showDuration = 3000; // ms each visible
@@ -2046,358 +1973,8 @@
                 setInterval(next, showDuration);
             })();
 
-            // Price calculation function (kept here for reference)
-            async function calculatePrice(origin, destination) {
-                const priceDisplay = document.getElementById('priceDisplay');
-            
-                try {
-                    priceDisplay.textContent = 'Calculating price...';
-                    priceDisplay.classList.add('loading');
-                    priceDisplay.classList.remove('has-price');
-                
-                    const response = await fetch(`/api/calculate-price?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`);
-                    const data = await response.json();
-                
-                    if (data.error) {
-                        throw new Error(data.error);
-                    }
-                
-                    const formattedPrice = new Intl.NumberFormat('en-UG', {
-                        style: 'currency',
-                        currency: 'UGX',
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 0
-                    }).format(data.price);
-                
-                    priceDisplay.textContent = `${formattedPrice}`;
-                    priceDisplay.classList.add('has-price');
-                } catch (error) {
-                    console.error('Error calculating price:', error);
-                    priceDisplay.textContent = 'Could not calculate price. Please try again.';
-                } finally {
-                    priceDisplay.classList.remove('loading');
-                }
-            }
-
-            // Request Ride modal + Google Maps integration
-            const GOOGLE_MAPS_API_KEY = 'AIzaSyCkbXtLR2mUNfonNZ7FUwOB1xU6RhdLLpg';
-            let requestMap, requestGeocoder, originMarker, destMarker, requestMapLoaded = false;
-            let requestDirectionsService = null, requestDirectionsRenderer = null;
-
-            function loadGoogleMaps() {
-                return new Promise((resolve, reject) => {
-                    if (window.google && window.google.maps) {
-                        requestMapLoaded = true;
-                        resolve(window.google.maps);
-                        return;
-                    }
-
-                    if (!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === 'YOUR_GOOGLE_MAPS_API_KEY') {
-                        // No API key provided; resolve null so UI can fallback
-                        resolve(null);
-                        return;
-                    }
-
-                    window.__initRequestMap = function() {
-                        requestMapLoaded = true;
-                        resolve(window.google.maps);
-                    };
-
-                    const s = document.createElement('script');
-                    s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&callback=__initRequestMap`;
-                    s.async = true;
-                    s.defer = true;
-                    s.onerror = () => reject(new Error('Google Maps failed to load'));
-                    document.head.appendChild(s);
-                });
-            }
-
-            function initRequestMapContainer() {
-                if (!window.google || !window.google.maps) return;
-                if (requestMap) return;
-                const mapEl = document.getElementById('requestMap');
-                requestMap = new google.maps.Map(mapEl, { center: { lat: 0, lng: 0 }, zoom: 14, streetViewControl: false });
-                requestGeocoder = new google.maps.Geocoder();
-
-                originMarker = new google.maps.Marker({ map: requestMap, title: 'You are here', icon: { path: google.maps.SymbolPath.CIRCLE, scale: 7, fillColor: '#1d4ed8', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 } });
-                destMarker = new google.maps.Marker({ map: requestMap, title: 'Destination' });
-
-                    // Directions service + renderer for showing route
-                    requestDirectionsService = new google.maps.DirectionsService();
-                    requestDirectionsRenderer = new google.maps.DirectionsRenderer({ map: requestMap, suppressMarkers: false });
-
-                requestMap.addListener('click', (e) => {
-                    setDestinationByLatLng(e.latLng);
-                });
-            }
-
-            function setDestinationByLatLng(latLng) {
-                if (!requestGeocoder) return;
-                destMarker.setPosition(latLng);
-                requestMap.panTo(latLng);
-                requestGeocoder.geocode({ location: latLng }, function(results, status) {
-                    const destInput = document.getElementById('requestDestinationInput');
-                    if (status === 'OK' && results && results[0]) {
-                        destInput.value = results[0].formatted_address;
-                        destInput.dataset.lat = latLng.lat();
-                        destInput.dataset.lng = latLng.lng();
-                        if (window.updateRequestEstimate) window.updateRequestEstimate();
-                    } else {
-                        destInput.value = `${latLng.lat().toFixed(5)}, ${latLng.lng().toFixed(5)}`;
-                        if (window.updateRequestEstimate) window.updateRequestEstimate();
-                    }
-                });
-            }
-
-            async function openRequestModal() {
-                const modal = document.getElementById('requestModal');
-                const originInfo = document.getElementById('requestOriginInfo');
-                modal.setAttribute('aria-hidden', 'false');
-                modal.classList.add('open');
-                document.body.classList.add('no-scroll');
-                
-                // Reset destination input
-                document.getElementById('requestDestinationInput').value = '';
-                delete document.getElementById('requestDestinationInput').dataset.lat;
-                delete document.getElementById('requestDestinationInput').dataset.lng;
-
-                // Auto-set a default destination (Kampala city center as example)
-                const destInput = document.getElementById('requestDestinationInput');
-                destInput.value = 'Kampala City Center, Uganda';
-                destInput.dataset.lat = 0.3476;
-                destInput.dataset.lng = 32.5825;
-
-                const maps = await loadGoogleMaps().catch(() => null);
-                const mapsLoaded = !!maps;
-
-                if (mapsLoaded) {
-                    initRequestMapContainer();
-                }
-
-                // Always attempt browser geolocation to obtain origin coordinates
-                if (navigator.geolocation) {
-                    navigator.geolocation.getCurrentPosition((pos) => {
-                        const lat = pos.coords.latitude;
-                        const lng = pos.coords.longitude;
-                        // store numeric coords on originInfo so estimate can run without Maps
-                        originInfo.dataset.originLat = lat;
-                        originInfo.dataset.originLng = lng;
-
-                        if (mapsLoaded && window.google && requestGeocoder && originMarker && requestMap) {
-                            const latLng = new google.maps.LatLng(lat, lng);
-                            originMarker.setPosition(latLng);
-                            requestMap.setCenter(latLng);
-                            requestMap.setZoom(15);
-                            originInfo.textContent = 'Detecting address...';
-                            requestGeocoder.geocode({ location: latLng }, (results, status) => {
-                                if (status === 'OK' && results && results[0]) {
-                                    originInfo.textContent = 'Origin: ' + results[0].formatted_address;
-                                    originInfo.dataset.origin = results[0].formatted_address;
-                                } else {
-                                    originInfo.textContent = `Origin: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-                                }
-                                // Now compute and show directions with the auto-set destination
-                                if (window.computeAndDisplayRoute) window.computeAndDisplayRoute();
-                                if (window.updateRequestEstimate) window.updateRequestEstimate();
-                            });
-                        } else {
-                            originInfo.textContent = `Origin: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-                            // Still show directions and estimate with simple coords
-                            if (window.computeAndDisplayRoute) window.computeAndDisplayRoute();
-                            if (window.updateRequestEstimate) window.updateRequestEstimate();
-                        }
-                    }, (err) => {
-                        originInfo.textContent = 'Could not detect location. Showing directions to default destination.';
-                        // Still try to show directions with a fallback origin
-                        if (window.computeAndDisplayRoute) window.computeAndDisplayRoute();
-                        if (window.updateRequestEstimate) window.updateRequestEstimate();
-                    }, { enableHighAccuracy: true, timeout: 8000 });
-                } else {
-                    originInfo.textContent = 'Geolocation not supported. Showing directions to default destination.';
-                    if (window.computeAndDisplayRoute) window.computeAndDisplayRoute();
-                    if (window.updateRequestEstimate) window.updateRequestEstimate();
-                }
-            }
-
-            function closeRequestModal() {
-                const modal = document.getElementById('requestModal');
-                modal.setAttribute('aria-hidden', 'true');
-                modal.classList.remove('open');
-                document.body.classList.remove('no-scroll');
-            }
-
-            // Compute and display route on the map when both origin & destination coords are available
-            window.computeAndDisplayRoute = function() {
-                try {
-                    // Ensure maps are loaded and ready
-                    if (!requestMapLoaded || !window.google || !window.google.maps) {
-                        console.warn('Google Maps not loaded yet');
-                        return;
-                    }
-                    if (!requestDirectionsService || !requestDirectionsRenderer) {
-                        console.warn('Directions service/renderer not initialized');
-                        return;
-                    }
-
-                    const originInfo = document.getElementById('requestOriginInfo');
-                    const pickupInput = document.getElementById('requestPickupInput');
-                    const destInput = document.getElementById('requestDestinationInput');
-
-                    // Prefer explicit pickup input coords; fallback to detected origin coords
-                    const oLat = pickupInput?.dataset?.lat || originInfo?.dataset?.originLat;
-                    const oLng = pickupInput?.dataset?.lng || originInfo?.dataset?.originLng;
-                    const dLat = destInput?.dataset?.lat;
-                    const dLng = destInput?.dataset?.lng;
-
-                    if (!oLat || !oLng || !dLat || !dLng) {
-                        console.warn('Missing coords for route:', { oLat, oLng, dLat, dLng });
-                        return;
-                    }
-
-                    const originLatLng = { lat: parseFloat(oLat), lng: parseFloat(oLng) };
-                    const destLatLng = { lat: parseFloat(dLat), lng: parseFloat(dLng) };
-
-                    console.log('Requesting directions:', originLatLng, '=>', destLatLng);
-                    requestDirectionsService.route({
-                        origin: originLatLng,
-                        destination: destLatLng,
-                        travelMode: google.maps.TravelMode.DRIVING
-                    }, (result, status) => {
-                        if (status === 'OK') {
-                            console.log('Directions OK, rendering route');
-                            requestDirectionsRenderer.setDirections(result);
-                        } else {
-                            console.warn('Directions request failed:', status);
-                        }
-                    });
-                } catch (e) {
-                    console.warn('computeAndDisplayRoute error', e);
-                }
-            };
-
-            // Update estimated price when origin & destination coordinates are available
-            window.updateRequestEstimate = async function() {
-                try {
-                    const originInfo = document.getElementById('requestOriginInfo');
-                    const destInput = document.getElementById('requestDestinationInput');
-                    const priceEl = document.getElementById('requestPrice');
-                    if (!priceEl) return;
-
-                    // Require numeric origin and destination coordinates (pickup overrides detected origin)
-                    const pickupInput = document.getElementById('requestPickupInput');
-                    const oLat = pickupInput?.dataset?.lat || originInfo?.dataset?.originLat;
-                    const oLng = pickupInput?.dataset?.lng || originInfo?.dataset?.originLng;
-                    const dLat = destInput?.dataset?.lat;
-                    const dLng = destInput?.dataset?.lng;
-
-                    if (!oLat || !oLng) {
-                        priceEl.textContent = 'Waiting for your location...';
-                        return;
-                    }
-                    if (!dLat || !dLng) {
-                        priceEl.textContent = 'Select destination to see estimate';
-                        return;
-                    }
-
-                    priceEl.textContent = 'Calculating price...';
-                    const originParam = `${oLat},${oLng}`;
-                    const destParam = `${dLat},${dLng}`;
-                    const res = await fetch(`/api/calculate-price?origin=${encodeURIComponent(originParam)}&destination=${encodeURIComponent(destParam)}`);
-                    const data = await res.json();
-                    if (!res.ok || data.error) {
-                        priceEl.textContent = 'Could not calculate price';
-                        return;
-                    }
-
-                    const formatted = new Intl.NumberFormat('en-UG', { style: 'currency', currency: 'UGX', minimumFractionDigits: 0 }).format(data.price || 0);
-                    const distanceText = data.distance?.text || '';
-                    const traffic = data.traffic_level ? ` • Traffic: ${data.traffic_level}` : '';
-                    priceEl.textContent = `${formatted}${distanceText ? ' • ' + distanceText : ''}${traffic}`;
-                    // Show directions on map after price is displayed
-                    console.log('Price calculated, calling computeAndDisplayRoute');
-                    if (window.computeAndDisplayRoute) window.computeAndDisplayRoute();
-                } catch (err) {
-                    console.warn('Estimate error', err);
-                }
-            };
-
-            // Wire up modal actions
-            const requestBtn = document.getElementById('requestRideBtn');
-            if (requestBtn) requestBtn.addEventListener('click', (e) => { e.preventDefault(); openRequestModal(); });
-            const requestClose = document.getElementById('requestModalClose');
-            if (requestClose) requestClose.addEventListener('click', () => closeRequestModal());
-            const requestCancel = document.getElementById('requestCancelBtn');
-            if (requestCancel) requestCancel.addEventListener('click', () => closeRequestModal());
-
-            const requestConfirm = document.getElementById('requestConfirmBtn');
-            if (requestConfirm) requestConfirm.addEventListener('click', async () => {
-                const destInput = document.getElementById('requestDestinationInput');
-                const originInfo = document.getElementById('requestOriginInfo');
-                const coordsEl = document.getElementById('requestCoords');
-
-                // Resolve origin: prefer explicit pickup input, else detected origin
-                let origin = null;
-                const pickupInput = document.getElementById('requestPickupInput');
-                if (pickupInput && pickupInput.dataset && pickupInput.dataset.lat && pickupInput.dataset.lng) {
-                    origin = { lat: parseFloat(pickupInput.dataset.lat), lng: parseFloat(pickupInput.dataset.lng) };
-                } else if (originInfo && originInfo.dataset && originInfo.dataset.originLat && originInfo.dataset.originLng) {
-                    origin = { lat: parseFloat(originInfo.dataset.originLat), lng: parseFloat(originInfo.dataset.originLng) };
-                } else {
-                    origin = originInfo ? (originInfo.dataset.origin || originInfo.textContent || '') : '';
-                }
-
-                // Resolve destination
-                let destination = null;
-                if (destInput && destInput.dataset && destInput.dataset.lat && destInput.dataset.lng) {
-                    destination = { lat: parseFloat(destInput.dataset.lat), lng: parseFloat(destInput.dataset.lng) };
-                } else if (destInput && destInput.value && destInput.value.includes(',')) {
-                    const parts = destInput.value.split(',').map(p => parseFloat(p.trim()));
-                    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-                        destination = { lat: parts[0], lng: parts[1] };
-                    } else {
-                        destination = destInput.value.trim();
-                    }
-                } else if (destInput) {
-                    destination = destInput.value.trim();
-                }
-
-                if (!destination || (typeof destination === 'string' && destination.length === 0)) {
-                    alert('Please select a destination by clicking on the map or typing it.');
-                    return;
-                }
-
-                // Update coordinate display
-                try {
-                    const originText = (origin && typeof origin === 'object') ? `${origin.lat.toFixed(5)}, ${origin.lng.toFixed(5)}` : (origin || 'Unknown');
-                    const destText = (destination && typeof destination === 'object') ? `${destination.lat.toFixed(5)}, ${destination.lng.toFixed(5)}` : (destination || 'Unknown');
-                    if (coordsEl) coordsEl.textContent = `Origin: ${originText} — Destination: ${destText}`;
-                } catch (e) { /* ignore display errors */ }
-
-                requestConfirm.disabled = true;
-                requestConfirm.textContent = 'Requesting...';
-
-                try {
-                    const payload = { origin, destination, timestamp: new Date().toISOString() };
-                    const res = await fetch('/request-ride', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-                    const data = await res.json();
-                    if (res.ok) {
-                        alert('Ride requested successfully. Reference: ' + (data.reference || 'n/a'));
-                        closeRequestModal();
-                    } else {
-                        alert('Failed to request ride: ' + (data.error || res.statusText));
-                    }
-                } catch (err) {
-                    console.error('Request ride error', err);
-                    alert('Network error while requesting ride.');
-                } finally {
-                    requestConfirm.disabled = false;
-                    requestConfirm.textContent = 'Confirm & Request';
-                }
-            });
+            // Price calculation is now handled by BookingForm.calculateDistance()
+            // which fetches from /api/calculate-price endpoint on server
         });
     </script>
 </body>
