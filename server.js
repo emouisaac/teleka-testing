@@ -9,6 +9,14 @@ const PORT = process.env.PORT || 3000;
 // Middleware to parse JSON bodies
 app.use(express.json());
 
+// Simple request logger to help debug incoming requests
+app.use((req, res, next) => {
+  try {
+    console.log('[req] %s %s', req.method, req.url);
+  } catch (e) {}
+  next();
+});
+
 // Serve static files from the root and ims directory
 app.use(express.static(path.join(__dirname)));
 app.use('/ims', express.static(path.join(__dirname, 'ims')));
@@ -227,6 +235,167 @@ app.get('/api/price-from-distance', (req, res) => {
     return res.json({ km, traffic, PRICE_PER_KM, trafficMultiplier, raw, price });
   } catch (err) {
     return res.status(500).json({ error: 'Internal' });
+  }
+});
+
+// --- Bookings storage and SSE (server-sent events) ---
+const fs = require('fs');
+const BOOKINGS_FILE = path.join(__dirname, 'data', 'bookings.json');
+
+function readBookings() {
+  try {
+    if (!fs.existsSync(BOOKINGS_FILE)) {
+      // ensure directory exists
+      try { fs.mkdirSync(path.dirname(BOOKINGS_FILE), { recursive: true }); } catch (e) {}
+      fs.writeFileSync(BOOKINGS_FILE, '[]', 'utf8');
+    }
+    const raw = fs.readFileSync(BOOKINGS_FILE, 'utf8');
+    return JSON.parse(raw || '[]');
+  } catch (err) {
+    console.error('[bookings] readBookings error', err);
+    return [];
+  }
+}
+
+function writeBookings(bookings) {
+  fs.writeFileSync(BOOKINGS_FILE, JSON.stringify(bookings, null, 2), 'utf8');
+}
+
+// SSE clients
+const sseClients = new Set();
+
+// Get all bookings
+app.get('/api/bookings', (req, res) => {
+  const bookings = readBookings();
+  res.json(bookings);
+});
+
+// Stream bookings via SSE for admin real-time notifications
+app.get('/api/bookings/stream', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+
+  const clientId = Date.now() + Math.random();
+  const client = { id: clientId, res };
+  sseClients.add(client);
+
+  req.on('close', () => {
+    sseClients.delete(client);
+  });
+});
+
+// Create a new booking
+app.post('/api/bookings', (req, res) => {
+  try {
+    const data = req.body;
+    console.log('[bookings] create request body:', data);
+    // Basic validation
+    if (!data || typeof data !== 'object') {
+      console.warn('[bookings] invalid payload');
+      return res.status(400).json({ error: 'Invalid booking payload' });
+    }
+    const name = (data.name || '').toString().trim();
+    const pickup = (data.pickup || '').toString().trim();
+    const destination = (data.destination || '').toString().trim();
+    if (!name || !pickup || !destination) {
+      console.warn('[bookings] missing required fields', { name, pickup, destination });
+      return res.status(400).json({ error: 'Missing required booking fields: name, pickup and destination are required' });
+    }
+
+    const bookings = readBookings();
+    const now = new Date().toISOString();
+    const newBooking = {
+      _id: String(Date.now()),
+      name: data.name,
+      email: data.email || '',
+      pickup: data.pickup,
+      destination: data.destination,
+      serviceType: data.serviceType || '',
+      date: data.date || '',
+      time: data.time || '',
+      estimatedPrice: data.estimatedPrice || '',
+      status: 'pending',
+      createdAt: now,
+      updatedAt: now
+    };
+
+    bookings.unshift(newBooking);
+    try {
+      writeBookings(bookings);
+    } catch (writeErr) {
+      console.error('[bookings] failed to persist booking', writeErr);
+      return res.status(500).json({ error: 'Failed to persist booking' });
+    }
+
+    // Notify SSE clients
+    const payload = JSON.stringify(newBooking);
+    for (const client of sseClients) {
+      try {
+        client.res.write(`event: new-booking\ndata: ${payload}\n\n`);
+      } catch (err) {
+        // ignore write errors
+      }
+    }
+
+    res.status(201).json(newBooking);
+  } catch (err) {
+    console.error('[bookings] unhandled error in create booking:', err && err.stack ? err.stack : err);
+    res.status(500).json({ error: 'Failed to create booking', detail: err && err.message ? err.message : String(err) });
+  }
+});
+
+// Debug helper: create booking via query params (bypass JSON body parsing issues)
+app.get('/api/bookings/create-test', (req, res) => {
+  try {
+    const name = (req.query.name || 'Test').toString();
+    const pickup = (req.query.pickup || 'X').toString();
+    const destination = (req.query.destination || 'Y').toString();
+    const bookings = readBookings();
+    const now = new Date().toISOString();
+    const newBooking = {
+      _id: String(Date.now()),
+      name, email: req.query.email || '', pickup, destination,
+      serviceType: req.query.serviceType || '', date: req.query.date || '', time: req.query.time || '',
+      estimatedPrice: req.query.estimatedPrice || '', status: 'pending', createdAt: now, updatedAt: now
+    };
+    bookings.unshift(newBooking);
+    writeBookings(bookings);
+    // notify
+    const payload = JSON.stringify(newBooking);
+    for (const client of sseClients) {
+      try { client.res.write(`event: new-booking\ndata: ${payload}\n\n`); } catch (e) {}
+    }
+    res.json(newBooking);
+  } catch (err) {
+    console.error('[bookings debug] create-test failed', err);
+    res.status(500).json({ error: 'create-test failed', detail: err && err.message });
+  }
+});
+
+// Delete booking by id
+app.delete('/api/bookings/:id', (req, res) => {
+  try {
+    const id = req.params.id;
+    let bookings = readBookings();
+    const idx = bookings.findIndex(b => b._id === id);
+    if (idx === -1) return res.status(404).json({ error: 'Booking not found' });
+    bookings.splice(idx, 1);
+    writeBookings(bookings);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete booking' });
+  }
+});
+
+// Clear-all bookings (admin)
+app.post('/api/bookings/clear-all', (req, res) => {
+  try {
+    writeBookings([]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to clear bookings' });
   }
 });
 

@@ -896,93 +896,7 @@
                 grid-template-columns: 1fr;
             }
         }
-        /* WhatsApp chat widget styles */
-        .whatsapp-fab {
-            position: fixed;
-            right: 20px;
-            bottom: 20px;
-            padding: 12px 18px;
-            min-width: 140px;
-            height: auto;
-            background: linear-gradient(90deg, var(--secondary), #e69500 90%);
-            color: #fff;
-            border-radius: 999px; /* pill */
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            font-weight: 700;
-            font-size: 0.95rem;
-            box-shadow: 0 10px 30px rgba(37, 99, 235, 0.12), 0 6px 12px rgba(0,0,0,0.08);
-            cursor: pointer;
-            z-index: 2000;
-            transition: transform 180ms cubic-bezier(.2,.9,.2,1), filter 180ms ease, box-shadow 180ms ease;
-            border: none;
-        }
-
-        .whatsapp-fab:hover {
-            transform: translateY(-6px);
-            filter: brightness(1.02);
-            box-shadow: 0 14px 40px rgba(37, 99, 235, 0.14), 0 8px 18px rgba(0,0,0,0.12);
-        }
-
-        .whatsapp-fab:focus {
-            outline: 3px solid rgba(245, 158, 11, 0.22);
-            outline-offset: 3px;
-            box-shadow: 0 10px 30px rgba(37, 99, 235, 0.12);
-        }
-
-        .whatsapp-panel {
-            position: fixed;
-            right: 20px;
-            bottom: 90px;
-            width: 320px;
-            max-width: calc(100% - 40px);
-            background: var(--bg);
-            color: var(--text);
-            border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-            overflow: hidden;
-            z-index: 2000;
-            display: none;
-        }
-
-        .whatsapp-panel.open { display: block; }
-
-        .whatsapp-header {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 12px 14px;
-            background: #075E54;
-            color: white;
-        }
-
-        .whatsapp-header .title { font-weight: 700; }
-
-        .whatsapp-body { padding: 12px 14px; }
-
-        .whatsapp-body p { margin-bottom: 8px; color: var(--text-light); font-size: 0.95rem; }
-
-        .whatsapp-input {
-            width: 100%;
-            padding: 10px 12px;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            resize: vertical;
-            min-height: 60px;
-            font-family: inherit;
-            margin-bottom: 8px;
-        }
-
-        .whatsapp-actions { display: flex; gap: 8px; }
-
-        .whatsapp-actions .btn { flex: 1; }
-
-        @media (max-width: 480px) {
-            .whatsapp-panel { right: 12px; left: 12px; width: auto; bottom: 80px; }
-            .whatsapp-fab { right: 12px; bottom: 12px; }
-        }
+        /* WhatsApp UI removed */
 
         /* Contact card interactivity */
         .contact-card--clickable { cursor: pointer; transition: transform 160ms ease, box-shadow 160ms ease; }
@@ -1183,10 +1097,7 @@
                         <label for="email">Email Address (Optional)</label>
                         <input type="email" id="email" class="form-control" placeholder="Enter your email">
                     </div>
-                    <div class="form-group" style="display: none;">
-                        <label for="whatsapp">WhatsApp Number</label>
-                        <input type="tel" id="whatsapp" class="form-control" placeholder="Enter WhatsApp number (e.g., 254712345678)">
-                    </div>
+                    <!-- WhatsApp input removed -->
                     <div class="form-group">
                         <label for="pickup">Pickup Location</label>
                         <input type="text" id="pickup" class="form-control" placeholder="Enter pickup address" required>
@@ -1282,12 +1193,7 @@
                         <p class="contact-value">+256 788 408 032</p>
                         <p>24/7 Customer Support</p>
                     </div>
-                    <div class="contact-card contact-card--clickable" role="button" tabindex="0" data-type="whatsapp" data-value="256788408032">
-                        <i class="fab fa-whatsapp"></i>
-                        <h3>WhatsApp</h3>
-                        <p class="contact-value">+256 788 408 032</p>
-                        <p>Quick Response on WhatsApp</p>
-                    </div>
+                    <!-- WhatsApp contact removed -->
                     <div class="contact-card contact-card--clickable" role="button" tabindex="0" data-type="email" data-value="info@teleka.com">
                         <i class="fas fa-envelope"></i>
                         <h3>Email</h3>
@@ -1367,29 +1273,7 @@
         </div>
     </div>
 
-    <!-- WhatsApp Chat Widget -->
-    <div class="whatsapp-panel" id="whatsappPanel" aria-hidden="true">
-        <div class="whatsapp-header">
-            <i class="fab fa-whatsapp" style="font-size:20px"></i>
-            <div>
-                <div class="title">Chat with Support</div>
-                <div style="font-size:12px; opacity:0.9">Typically replies within a few minutes</div>
-            </div>
-        </div>
-        <div class="whatsapp-body">
-            <p>Send us a message and our customer service provider will reply on WhatsApp.</p>
-            <textarea id="whatsappMessage" class="whatsapp-input" placeholder="Hi, I need help with my booking...">Hello, I need help with my booking.</textarea>
-            <div class="whatsapp-actions">
-                <button class="btn btn-outline" id="whatsappClose">Close</button>
-                <button class="btn" id="whatsappSend">Start Chat</button>
-            </div>
-        </div>
-    </div>
-
-    <button class="whatsapp-fab" id="whatsappFab" aria-label="Book Now" title="Book Now">
-        <i class="fas fa-calendar-check" style="font-size:18px; margin-right:8px"></i>
-        Book Now
-    </button>
+    <!-- WhatsApp chat widget and FAB removed -->
 
     <script>
 
@@ -1724,12 +1608,15 @@
         
         bookingForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
-            // Collect form data
+
+            const submitBtn = bookingForm.querySelector('button[type="submit"]');
+            const originalBtnText = submitBtn ? submitBtn.textContent : 'Book Now';
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submitting...'; }
+
+            // Collect form data (WhatsApp removed)
             const formData = {
                 name: document.getElementById('name').value,
                 email: document.getElementById('email').value,
-                whatsapp: document.getElementById('whatsapp').value,
                 pickup: document.getElementById('pickup').value,
                 destination: document.getElementById('destination').value,
                 serviceType: document.getElementById('serviceType').value,
@@ -1738,31 +1625,36 @@
             };
 
             try {
-                // Create WhatsApp message
-                const message = `🚕 New Booking Request\n\n` +
-                    `Customer Details:\n` +
-                    `👤 Name: ${formData.name}\n` +
-                    `📞 WhatsApp: ${formData.whatsapp}\n` +
-                    `📍 Pickup: ${formData.pickup}\n` +
-                    `🏁 Destination: ${formData.destination}\n` +
-                    `🚖 Service: ${formData.serviceType}\n` +
-                        `💰 Estimated Price: ${document.getElementById('priceDisplay').textContent}\n` +
-                    `📅 Date: ${formData.date}\n` +
-                    `⏰ Time: ${formData.time}\n\n` +
-                    `Please confirm my booking. Thank you!`;
+                // Send booking to server
+                const estimatedPrice = document.getElementById('priceDisplay')?.innerText || '';
+                const resp = await fetch('/api/bookings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: formData.name,
+                        email: formData.email,
+                        pickup: formData.pickup,
+                        destination: formData.destination,
+                        serviceType: formData.serviceType,
+                        date: formData.date,
+                        time: formData.time,
+                        estimatedPrice
+                    })
+                });
 
-                // Ensure the business phone number is clean (only digits)
-                const businessPhoneNumber = '256788408032';
-                
-                // Open WhatsApp with the booking message using the standard wa.me format
-                const whatsappUrl = `https://wa.me/${businessPhoneNumber}?text=${encodeURIComponent(message)}`;
-                window.open(whatsappUrl, '_blank');
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({}));
+                    throw new Error(err.error || `Server responded with status ${resp.status}`);
+                }
 
-                alert('Thank you for your booking! We will contact you shortly via WhatsApp to confirm your ride.');
+                const created = await resp.json();
+                alert('Thank you, ' + (created.name || '') + '! Your booking was submitted.');
                 bookingForm.reset();
             } catch (error) {
                 console.error('Booking error:', error);
-                alert('Sorry, there was an error submitting your booking. Please try again.');
+                alert('Sorry, there was an error submitting your booking: ' + (error.message || String(error)));
+            } finally {
+                if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = originalBtnText; }
             }
         });
 
@@ -1833,10 +1725,10 @@
             function openModal(type, value) {
                 modal.setAttribute('aria-hidden', 'false');
                 modal.classList.add('open');
-                modalDetails.innerHTML = `<div style="margin-bottom:8px"><strong>${type === 'email' ? 'Email' : type === 'whatsapp' ? 'WhatsApp' : 'Phone'}</strong></div><div class="contact-value">${value}</div>`;
+                modalDetails.innerHTML = `<div style="margin-bottom:8px"><strong>${type === 'email' ? 'Email' : 'Phone'}</strong></div><div class="contact-value">${value}</div>`;
                 modalActions.innerHTML = '';
 
-                if (type === 'phone') {
+                if (type === 'phone' || type === 'whatsapp') {
                     const callBtn = document.createElement('a');
                     callBtn.className = 'btn';
                     callBtn.href = `tel:${value.replace(/\s+/g,'')}`;
@@ -1848,22 +1740,6 @@
                     smsBtn.href = `sms:${value.replace(/\s+/g,'')}`;
                     smsBtn.textContent = 'Send SMS';
                     modalActions.appendChild(smsBtn);
-                } else if (type === 'whatsapp') {
-                    const waBtn = document.createElement('a');
-                    waBtn.className = 'btn';
-                    // Ensure the number doesn't have spaces or special characters
-                    const cleanNumber = value.replace(/\D/g, '');
-                    waBtn.href = `https://wa.me/${cleanNumber}`;
-                    waBtn.target = '_blank';
-                    waBtn.rel = 'noopener noreferrer';
-                    waBtn.textContent = 'Start WhatsApp Chat';
-                    modalActions.appendChild(waBtn);
-
-                    const callBtn = document.createElement('a');
-                    callBtn.className = 'btn btn-outline';
-                    callBtn.href = `tel:+${value.replace(/\D/g, '')}`;
-                    callBtn.textContent = 'Call';
-                    modalActions.appendChild(callBtn);
                 } else if (type === 'email') {
                     const mailBtn = document.createElement('a');
                     mailBtn.className = 'btn';

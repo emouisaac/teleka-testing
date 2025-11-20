@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teleka Taxi | Driver Dashboard</title>
+    <link rel="icon" href="../ims/1110.png" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+    <style>
+        :root {
+            --primary: #2549eb;
+            --primary-dark: #1d26d8;
+            --secondary: #f59e0b;
+            --accent: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --text: #1f2937;
+            --text-light: #6b7280;
+            --bg: #f9fafb;
+            --bg-secondary: #f3f4f6;
+            --bg-tertiary: #e5e7eb;
+            --border: #e5e7eb;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --transition: all 0.3s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        .driver-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 20px;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+            z-index: 100;
+        }
+
+        .sidebar-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .sidebar-header img {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+        }
+
+        .sidebar-header h2 {
+            font-size: 1.3rem;
+            font-weight: 700;
+        }
+
+        .driver-status {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .driver-status h3 {
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+            opacity: 0.8;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: var(--accent);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .sidebar-nav {
+            list-style: none;
+            margin-bottom: 30px;
+        }
+
+        .sidebar-nav li {
+            margin-bottom: 10px;
+        }
+
+        .sidebar-nav a {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 15px;
+            color: rgba(255, 255, 255, 0.8);
+            border-radius: 6px;
+            transition: var(--transition);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .sidebar-nav a:hover,
+        .sidebar-nav a.active {
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .sidebar-nav i {
+            width: 20px;
+            text-align: center;
+        }
+
+        .sidebar-footer {
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .sidebar-footer a {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 15px;
+            color: rgba(255, 255, 255, 0.8);
+            border-radius: 6px;
+            transition: var(--transition);
+            text-decoration: none;
+        }
+
+        .sidebar-footer a:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 280px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: white;
+            padding: 20px 30px;
+            box-shadow: var(--shadow);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .header h1 {
+            font-size: 1.8rem;
+            color: var(--text);
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: var(--transition);
+            text-decoration: none;
+            font-size: 0.95rem;
+        }
+
+        .btn:hover {
+            background-color: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .btn-secondary {
+            background-color: var(--secondary);
+            color: var(--text);
+        }
+
+        .btn-secondary:hover {
+            background-color: #e69500;
+        }
+
+        .btn-success {
+            background-color: var(--accent);
+        }
+
+        .btn-success:hover {
+            background-color: #059669;
+        }
+
+        .btn-danger {
+            background-color: var(--danger);
+        }
+
+        .btn-danger:hover {
+            background-color: #dc2626;
+        }
+
+        /* Content Area */
+        .content {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+        }
+
+        .content-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            height: 100%;
+        }
+
+        /* Requests Section */
+        .requests-section {
+            background: white;
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .section-header {
+            padding: 20px;
+            background-color: var(--bg-secondary);
+            border-bottom: 2px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .section-header h2 {
+            font-size: 1.3rem;
+            color: var(--text);
+        }
+
+        .filter-badge {
+            background-color: var(--primary);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .requests-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0;
+        }
+
+        .request-card {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            transition: var(--transition);
+            background-color: white;
+            border-left: 4px solid transparent;
+        }
+
+        .request-card:hover {
+            background-color: var(--bg-secondary);
+            border-left-color: var(--primary);
+        }
+
+        .request-card.accepted {
+            border-left-color: var(--accent);
+            background-color: rgba(16, 185, 129, 0.05);
+        }
+
+        .request-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 12px;
+        }
+
+        .request-customer {
+            font-weight: 600;
+            color: var(--text);
+            font-size: 1rem;
+        }
+
+        .request-time {
+            font-size: 0.85rem;
+            color: var(--text-light);
+        }
+
+        .request-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-new {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge-accepted {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+
+        .request-details {
+            margin-bottom: 12px;
+        }
+
+        .detail-item {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 6px;
+            font-size: 0.9rem;
+            color: var(--text-light);
+        }
+
+        .detail-item i {
+            width: 16px;
+            color: var(--primary);
+            margin-top: 2px;
+        }
+
+        .request-price {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 12px;
+        }
+
+        .request-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .action-btn {
+            flex: 1;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: var(--transition);
+        }
+
+        .action-btn-accept {
+            background-color: var(--accent);
+            color: white;
+        }
+
+        .action-btn-accept:hover {
+            background-color: #059669;
+        }
+
+        .action-btn-reject {
+            background-color: var(--bg-tertiary);
+            color: var(--text);
+        }
+
+        .action-btn-reject:hover {
+            background-color: #d1d5db;
+        }
+
+        .empty-state {
+            padding: 40px 20px;
+            text-align: center;
+            color: var(--text-light);
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            opacity: 0.3;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 8px;
+            color: var(--text);
+        }
+
+        /* Map Section */
+        .map-section {
+            background: white;
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #map {
+            flex: 1;
+            min-height: 400px;
+            border-radius: 12px;
+            z-index: 1;
+        }
+
+        .map-footer {
+            padding: 15px 20px;
+            background-color: var(--bg-secondary);
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .map-info {
+            font-size: 0.9rem;
+            color: var(--text-light);
+        }
+
+        .map-info strong {
+            color: var(--text);
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.open {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .modal-header h2 {
+            color: var(--text);
+            font-size: 1.5rem;
+        }
+
+        .modal-body {
+            margin-bottom: 20px;
+        }
+
+        .detail-group {
+            margin-bottom: 15px;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: var(--text-light);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .detail-value {
+            color: var(--text);
+            font-size: 0.95rem;
+        }
+
+        .modal-footer {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .content-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                width: 100px;
+            }
+
+            .sidebar-header h2,
+            .sidebar-nav span {
+                display: none;
+            }
+
+            .main-content {
+                margin-left: 100px;
+            }
+
+            .sidebar-header {
+                justify-content: center;
+            }
+
+            .sidebar-nav a,
+            .sidebar-footer a {
+                justify-content: center;
+            }
+
+            .driver-status {
+                display: none;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 70px;
+                padding: 15px;
+            }
+
+            .main-content {
+                margin-left: 70px;
+            }
+
+            .header {
+                flex-direction: column;
+                gap: 15px;
+                align-items: flex-start;
+                padding: 15px;
+            }
+
+            .header h1 {
+                font-size: 1.3rem;
+            }
+
+            .header-actions {
+                width: 100%;
+            }
+
+            .header-actions .btn {
+                flex: 1;
+                justify-content: center;
+            }
+
+            .content {
+                padding: 15px;
+            }
+
+            .content-grid {
+                gap: 15px;
+            }
+
+            .request-card {
+                padding: 15px;
+            }
+
+            .section-header {
+                padding: 15px;
+            }
+
+            .sidebar-nav a i,
+            .sidebar-footer a i {
+                margin: 0;
+            }
+
+            #map {
+                min-height: 300px;
+            }
+
+            .modal-content {
+                padding: 20px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .sidebar {
+                width: 60px;
+            }
+
+            .main-content {
+                margin-left: 60px;
+            }
+
+            .header h1 {
+                font-size: 1rem;
+            }
+
+            .section-header h2 {
+                font-size: 1rem;
+            }
+
+            .request-header {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .detail-item {
+                font-size: 0.85rem;
+            }
+
+            #map {
+                min-height: 250px;
+            }
+
+            .modal-content {
+                width: 95%;
+                padding: 15px;
+            }
+        }
+
+        .leaflet-routing-machine {
+            background: white;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="driver-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <img src="../ims/1110.png" alt="Teleka Logo">
+                <h2>Teleka</h2>
+            </div>
+
+            <div class="driver-status">
+                <h3>Status</h3>
+                <div class="status-indicator">
+                    <div class="status-dot"></div>
+                    <span id="statusText">Online</span>
+                </div>
+            </div>
+
+            <nav>
+                <ul class="sidebar-nav">
+                    <li>
+                        <a href="#" class="active" data-page="dashboard">
+                            <i class="fas fa-home"></i>
+                            <span>Dashboard</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-page="active">
+                            <i class="fas fa-play-circle"></i>
+                            <span>Active Rides</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-page="history">
+                            <i class="fas fa-history"></i>
+                            <span>History</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-page="earnings">
+                            <i class="fas fa-wallet"></i>
+                            <span>Earnings</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+
+            <div class="sidebar-footer">
+                <a href="../">
+                    <i class="fas fa-arrow-left"></i>
+                    <span>Back to Site</span>
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <div class="header">
+                <h1>Ride Requests</h1>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" id="refreshBtn">
+                        <i class="fas fa-sync-alt"></i>
+                        Refresh
+                    </button>
+                    <button class="btn btn-danger" id="goOfflineBtn">
+                        <i class="fas fa-power-off"></i>
+                        Go Offline
+                    </button>
+                </div>
+            </div>
+
+            <!-- Content -->
+            <div class="content">
+                <div class="content-grid">
+                    <!-- Requests Section -->
+                    <div class="requests-section">
+                        <div class="section-header">
+                            <h2>New Requests</h2>
+                            <span class="filter-badge" id="requestCount">0</span>
+                        </div>
+                        <div class="requests-list" id="requestsList">
+                            <div class="empty-state">
+                                <i class="fas fa-inbox"></i>
+                                <h3>No Requests Yet</h3>
+                                <p>New ride requests will appear here</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Map Section -->
+                    <div class="map-section">
+                        <div id="map"></div>
+                        <div class="map-footer">
+                            <div class="map-info">
+                                <strong>Location:</strong> <span id="currentLocation">Waiting for GPS...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Request Detail Modal -->
+    <div class="modal" id="requestModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Ride Request Details</h2>
+            </div>
+            <div class="modal-body" id="requestModalBody">
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeRequestModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+
+    <script>
+        let allRequests = [];
+        let acceptedRequests = [];
+        let map = null;
+        let currentMarker = null;
+        let routingControl = null;
+        let driverLocation = { lat: -1.9536, lng: 29.8739 }; // Default: Kampala, Uganda
+
+        // Initialize Map
+        function initMap() {
+            map = L.map('map').setView([driverLocation.lat, driverLocation.lng], 13);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+
+            // Add current location marker
+            currentMarker = L.marker([driverLocation.lat, driverLocation.lng], {
+                icon: L.icon({
+                    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+                    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                    iconSize: [25, 41],
+                    iconAnchor: [12, 41],
+                    popupAnchor: [1, -34],
+                    shadowSize: [41, 41]
+                })
+            }).addTo(map).bindPopup('Your Location');
+        }
+
+        // Get GPS Location
+        function getLocation() {
+            if ('geolocation' in navigator) {
+                navigator.geolocation.watchPosition(
+                    (position) => {
+                        driverLocation = {
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude
+                        };
+                        updateMapLocation();
+                    },
+                    (error) => {
+                        console.log('GPS error:', error.message);
+                    },
+                    { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+                );
+            }
+        }
+
+        // Update map location
+        function updateMapLocation() {
+            if (currentMarker) {
+                currentMarker.setLatLng([driverLocation.lat, driverLocation.lng]);
+                map.setView([driverLocation.lat, driverLocation.lng], 13);
+            }
+            document.getElementById('currentLocation').textContent = 
+                `${driverLocation.lat.toFixed(4)}, ${driverLocation.lng.toFixed(4)}`;
+        }
+
+        // Load requests
+        async function loadRequests() {
+            try {
+                const response = await fetch('/api/driver/requests');
+                if (!response.ok) throw new Error('Failed to load requests');
+                allRequests = await response.json();
+                renderRequests();
+            } catch (error) {
+                console.error('Error loading requests:', error);
+            }
+        }
+
+        // Render requests
+        function renderRequests() {
+            const requestsList = document.getElementById('requestsList');
+            const pendingRequests = allRequests.filter(r => r.status === 'pending');
+
+            document.getElementById('requestCount').textContent = pendingRequests.length;
+
+            if (pendingRequests.length === 0) {
+                requestsList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-inbox"></i>
+                        <h3>No Requests Yet</h3>
+                        <p>New ride requests will appear here</p>
+                    </div>
+                `;
+                return;
+            }
+
+            requestsList.innerHTML = pendingRequests.map((request, index) => `
+                <div class="request-card" onclick="viewRequest(${index})">
+                    <div class="request-header">
+                        <div>
+                            <div class="request-customer">${request.name}</div>
+                            <div class="request-time">${formatTime(request.createdAt)}</div>
+                        </div>
+                        <span class="request-badge badge-new">New</span>
+                    </div>
+                    <div class="request-details">
+                        <div class="detail-item">
+                            <i class="fas fa-map-marker-alt"></i>
+                            <span>${request.pickup}</span>
+                        </div>
+                        <div class="detail-item">
+                            <i class="fas fa-flag-checkered"></i>
+                            <span>${request.destination}</span>
+                        </div>
+                        <div class="detail-item">
+                            <i class="fas fa-calendar-alt"></i>
+                            <span>${request.date} ${request.time}</span>
+                        </div>
+                        <div class="detail-item">
+                            <i class="fas fa-car"></i>
+                            <span>${request.serviceType}</span>
+                        </div>
+                    </div>
+                    <div class="request-price">${request.estimatedPrice}</div>
+                    <div class="request-actions">
+                        <button class="action-btn action-btn-accept" onclick="acceptRequest(event, ${index})">Accept</button>
+                        <button class="action-btn action-btn-reject" onclick="rejectRequest(event, ${index})">Reject</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // View request details
+        function viewRequest(index) {
+            const request = allRequests[index];
+            const modal = document.getElementById('requestModal');
+            const body = document.getElementById('requestModalBody');
+
+            body.innerHTML = `
+                <div class="detail-group">
+                    <div class="detail-label">Customer Name</div>
+                    <div class="detail-value">${request.name}</div>
+                </div>
+                <div class="detail-group">
+                    <div class="detail-label">Email</div>
+                    <div class="detail-value">${request.email || 'Not provided'}</div>
+                </div>
+                <div class="detail-group">
+                    <div class="detail-label">Phone</div>
+                    <div class="detail-value">${request.whatsapp || 'Not provided'}</div>
+                </div>
+                <div class="detail-group">
+                    <div class="detail-label">Pickup Location</div>
+                    <div class="detail-value">${request.pickup}</div>
+                </div>
+                <div class="detail-group">
+                    <div class="detail-label">Destination</div>
+                    <div class="detail-value">${request.destination}</div>
+                </div>
+                <div class="detail-group">
+                    <div class="detail-label">Service Type</div>
+                    <div class="detail-value">${request.serviceType}</div>
+                </div>
+                <div class="detail-group">
+                    <div class="detail-label">Date & Time</div>
+                    <div class="detail-value">${request.date} ${request.time}</div>
+                </div>
+                <div class="detail-group">
+                    <div class="detail-label">Estimated Price</div>
+                    <div class="detail-value"><strong>${request.estimatedPrice}</strong></div>
+                </div>
+                <div class="detail-group">
+                    <div class="detail-label">Request Received</div>
+                    <div class="detail-value">${new Date(request.createdAt).toLocaleString()}</div>
+                </div>
+            `;
+            modal.classList.add('open');
+        }
+
+        // Close request modal
+        function closeRequestModal() {
+            document.getElementById('requestModal').classList.remove('open');
+        }
+
+        // Accept request
+        async function acceptRequest(event, index) {
+            event.stopPropagation();
+            const request = allRequests[index];
+
+            try {
+                const response = await fetch(`/api/driver/requests/${request._id}/accept`, {
+                    method: 'POST'
+                });
+
+                if (!response.ok) throw new Error('Failed to accept request');
+
+                request.status = 'accepted';
+                acceptedRequests.push(request);
+                renderRequests();
+                alert('✅ Request accepted!\n\nYou can now see the pickup and destination on the map.');
+                plotRouteOnMap(request);
+                loadRequests();
+            } catch (error) {
+                console.error('Error accepting request:', error);
+                alert('Error accepting request: ' + error.message);
+            }
+        }
+
+        // Reject request
+        function rejectRequest(event, index) {
+            event.stopPropagation();
+            if (confirm('Are you sure you want to reject this request?')) {
+                allRequests.splice(index, 1);
+                renderRequests();
+            }
+        }
+
+        // Plot route on map
+        function plotRouteOnMap(request) {
+            if (routingControl) {
+                map.removeControl(routingControl);
+            }
+
+            // Remove existing markers
+            map.eachLayer(layer => {
+                if (layer instanceof L.Marker && layer !== currentMarker) {
+                    map.removeLayer(layer);
+                }
+            });
+
+            // Add pickup and destination markers
+            L.marker([driverLocation.lat, driverLocation.lng], {
+                icon: L.icon({
+                    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+                    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                    iconSize: [25, 41],
+                    iconAnchor: [12, 41],
+                    popupAnchor: [1, -34],
+                    shadowSize: [41, 41]
+                })
+            }).addTo(map).bindPopup('Your Location');
+
+            // Note: For a production app, you'd geocode the pickup and destination addresses
+            // to get coordinates. For now, we'll show a placeholder message.
+            alert('Route will be displayed once addresses are geocoded.\n\nIn production, integrate with Google Maps Geocoding API.');
+        }
+
+        // Format time
+        function formatTime(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diff = Math.floor((now - date) / 1000);
+
+            if (diff < 60) return 'Just now';
+            if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+            if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+            return date.toLocaleDateString();
+        }
+
+        // Event Listeners
+        document.getElementById('refreshBtn').addEventListener('click', loadRequests);
+
+        document.getElementById('goOfflineBtn').addEventListener('click', () => {
+            if (confirm('Are you sure you want to go offline?')) {
+                document.getElementById('statusText').textContent = 'Offline';
+                document.querySelector('.status-dot').style.backgroundColor = '#ef4444';
+                alert('You are now offline. Customers cannot request your rides.');
+            }
+        });
+
+        // Navigation
+        document.querySelectorAll('[data-page]').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                document.querySelectorAll('[data-page]').forEach(l => l.classList.remove('active'));
+                e.currentTarget.classList.add('active');
+                const page = e.currentTarget.dataset.page;
+                
+                if (page === 'dashboard') {
+                    location.reload();
+                } else {
+                    alert('Feature coming soon: ' + page);
+                }
+            });
+        });
+
+        // Close modal when clicking outside
+        document.getElementById('requestModal').addEventListener('click', (e) => {
+            if (e.target.id === 'requestModal') closeRequestModal();
+        });
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            initMap();
+            getLocation();
+            loadRequests();
+
+            // Auto-refresh every 5 seconds
+            setInterval(loadRequests, 5000);
+        });
+    </script>
+</body>
+</html>
