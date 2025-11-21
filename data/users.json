@@ -1,0 +1,42 @@
+[
+  {
+    "id": "1763753089302",
+    "name": "Isaac Emou",
+    "phone": "0788408032",
+    "email": "emouisaac1@gmail.com",
+    "passwordHash": "b6553e5b52c2f1d1765ce0668aa8155e43ec40f3bec565e624b614681ec5d07c0fd949ee1e5a4f9583fea68ba48acce8f6ae6fa7aff9dfef83f3c841ff9dc0fa",
+    "salt": "b763a30b44831b69e3d2edec21d8e490",
+    "createdAt": "2025-11-21T19:24:49.302Z",
+    "updatedAt": "2025-11-21T19:24:49.302Z"
+  },
+  {
+    "id": "1763754515622",
+    "name": "Isaac Emou",
+    "phone": "0767320359",
+    "email": "isaacemou2@gmail.com",
+    "passwordHash": "834d50c997805e60aa21ca1a74756b7c16cce729d29ee4340643784207b6fee5ed42621293e3295f7ada9a1efd04b4804b301dd3a3c15a96d9dfcd5db191d50d",
+    "salt": "27e047f3e8d0c26e05942adfb58736e8",
+    "createdAt": "2025-11-21T19:48:35.622Z",
+    "updatedAt": "2025-11-21T19:48:35.622Z"
+  },
+  {
+    "id": "1763754541396",
+    "name": "Test User",
+    "phone": "256770000001",
+    "email": "testuser@example.com",
+    "passwordHash": "97b3e6edceb4773a2e64df92233c64d798cd8ebe5bc3c67a59bd5574d785afa9b469d794824298e528de451e755068071672d4f11580e8faba402255cf949ca1",
+    "salt": "c49a2b43a05bd2bd935e156e2a177ecb",
+    "createdAt": "2025-11-21T19:49:01.396Z",
+    "updatedAt": "2025-11-21T19:49:01.396Z"
+  },
+  {
+    "id": "1763754557438",
+    "name": "User Two",
+    "phone": "256770000002",
+    "email": "user2@example.com",
+    "passwordHash": "755824ef53c605e19a5618d3600ca697c54a4ea78d03bde827be87c1589d3b74ef38ef97fc40583836c0cbfab4dc389a5c7e53b1f000b622b0d6eaf7ba924eb9",
+    "salt": "12e6abf2659578b5c5a661ca30f1002a",
+    "createdAt": "2025-11-21T19:49:17.438Z",
+    "updatedAt": "2025-11-21T19:49:17.438Z"
+  }
+]

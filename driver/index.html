@@ -664,6 +664,23 @@
             border-radius: 8px;
         }
     </style>
+    <style>
+        /* Auth modal styles (shared) */
+        .auth-backdrop { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(2,6,23,0.55); z-index: 2000; }
+        .auth-modal { width: 440px; max-width: 94%; border-radius: 12px; background: #fff; box-shadow: 0 10px 30px rgba(2,6,23,0.3); overflow: hidden; }
+        .auth-header { display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--border); }
+        .auth-title { font-size:1.1rem; font-weight:700; }
+        .auth-close { background:none; border:none; font-size:1.1rem; cursor:pointer; color:var(--text-light); }
+        .auth-body { padding:18px 20px; }
+        .auth-tabs { display:flex; gap:8px; margin-bottom:14px; }
+        .auth-tab { flex:1; text-align:center; padding:8px 10px; border-radius:8px; cursor:pointer; background:var(--bg-secondary); color:var(--text); font-weight:600; }
+        .auth-tab.active { background:var(--primary); color:#fff; }
+        .auth-form { display:block; }
+        .auth-form .form-group { margin-bottom:12px; }
+        .auth-form label { display:block; font-size:0.85rem; margin-bottom:6px; color:var(--text-light); }
+        .auth-form input { width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:transparent; color:inherit; }
+        .auth-actions { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:12px; }
+    </style>
 </head>
 <body>
     <div class="driver-container">
@@ -733,6 +750,7 @@
                         <i class="fas fa-power-off"></i>
                         Go Offline
                     </button>
+                    <button type="button" class="btn btn-outline" id="loginBtn">Login</button>
                 </div>
             </div>
 
@@ -1080,5 +1098,194 @@
             setInterval(loadRequests, 5000);
         });
     </script>
-</body>
-</html>
+        <!-- Auth Modal -->
+        <div class="auth-backdrop" id="authBackdrop" aria-hidden="true">
+            <div class="auth-modal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+                <div class="auth-header">
+                    <div class="auth-title" id="authTitle">Welcome</div>
+                    <button class="auth-close" id="authClose" aria-label="Close">&times;</button>
+                </div>
+                <div class="auth-body">
+                    <div class="auth-tabs" role="tablist">
+                        <div class="auth-tab active" data-target="login" role="tab">Login</div>
+                        <div class="auth-tab" data-target="register" role="tab">Register</div>
+                    </div>
+
+                    <form class="auth-form" id="loginForm" data-form="login">
+                        <div class="form-group">
+                            <label for="loginEmail">Email or Phone</label>
+                            <input id="loginEmail" name="identifier" type="text" placeholder="you@example.com or 2567xxxxxxx" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="loginPassword">Password</label>
+                            <input id="loginPassword" name="password" type="password" placeholder="••••••••" required>
+                        </div>
+                        <div class="auth-actions">
+                            <button class="btn" type="submit">Sign In</button>
+                            <a href="#" class="auth-aux" id="forgotLink">Forgot?</a>
+                        </div>
+                    </form>
+
+                    <form class="auth-form" id="registerForm" data-form="register" style="display:none;">
+                        <div class="form-group">
+                            <label for="regName">Full name</label>
+                            <input id="regName" name="name" type="text" placeholder="Your full name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="regPhone">Phone</label>
+                            <input id="regPhone" name="phone" type="text" placeholder="2567xxxxxxx" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="regEmail">Email</label>
+                            <input id="regEmail" name="email" type="email" placeholder="you@example.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="regPassword">Password</label>
+                            <input id="regPassword" name="password" type="password" placeholder="Create a password" required>
+                        </div>
+                        <div class="auth-actions">
+                            <button class="btn" type="submit">Create Account</button>
+                            <div class="auth-aux">By creating an account you agree to our <a href="../privacy-policy.html">Privacy</a>.</div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            (function(){
+                const openBtn = document.getElementById('loginBtn');
+                const backdrop = document.getElementById('authBackdrop');
+                const closeBtn = document.getElementById('authClose');
+                const tabs = Array.from(document.querySelectorAll('.auth-tab'));
+                const loginForm = document.getElementById('loginForm');
+                const registerForm = document.getElementById('registerForm');
+
+                let authError = document.getElementById('authError');
+                if(!authError){
+                    authError = document.createElement('div');
+                    authError.id = 'authError';
+                    authError.className = 'auth-error';
+                    authError.style.display = 'none';
+                    authError.style.color = '#ef4444';
+                    authError.style.marginBottom = '10px';
+                    const body = document.querySelector('.auth-body');
+                    body.insertBefore(authError, body.firstChild);
+                }
+
+                function showModal(tab){
+                    backdrop.style.display = 'flex';
+                    backdrop.setAttribute('aria-hidden','false');
+                    document.body.style.overflow = 'hidden';
+                    setActiveTab(tab || 'login');
+                    clearError();
+                }
+
+                function closeModal(){
+                    backdrop.style.display = 'none';
+                    backdrop.setAttribute('aria-hidden','true');
+                    document.body.style.overflow = '';
+                }
+
+                function setActiveTab(name){
+                    tabs.forEach(t => {
+                        const target = t.getAttribute('data-target');
+                        if(target === name){ t.classList.add('active'); }
+                        else { t.classList.remove('active'); }
+                    });
+                    if(name === 'login'){
+                        loginForm.style.display = 'block'; registerForm.style.display = 'none';
+                    } else {
+                        loginForm.style.display = 'none'; registerForm.style.display = 'block';
+                    }
+                    clearError();
+                }
+
+                function clearError(){ authError.style.display = 'none'; authError.textContent = ''; }
+                function showError(msg){ authError.textContent = msg || 'An error occurred'; authError.style.display = 'block'; }
+
+                async function postJSON(url, data){
+                    try{
+                        const res = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(data)
+                        });
+                        let json = null;
+                        try{ json = await res.json(); } catch(e) { json = null; }
+                        return { ok: res.ok, status: res.status, json };
+                    } catch(err){
+                        return { ok: false, error: err };
+                    }
+                }
+
+                openBtn?.addEventListener('click', function(e){ e.preventDefault(); showModal('login'); });
+                closeBtn?.addEventListener('click', closeModal);
+                backdrop?.addEventListener('click', function(e){ if(e.target === backdrop) closeModal(); });
+                tabs.forEach(t => t.addEventListener('click', () => setActiveTab(t.getAttribute('data-target'))));
+
+                loginForm?.addEventListener('submit', async function(e){
+                    e.preventDefault();
+                    clearError();
+                    const submitBtn = loginForm.querySelector('button[type=submit]');
+                    const origText = submitBtn.textContent;
+                    submitBtn.textContent = 'Signing in...';
+                    submitBtn.disabled = true;
+
+                    const identifier = document.getElementById('loginEmail').value.trim();
+                    const password = document.getElementById('loginPassword').value;
+                    if(!identifier || !password){ showError('Please enter both identifier and password'); submitBtn.textContent = origText; submitBtn.disabled = false; return; }
+
+                    const res = await postJSON('/api/auth/login', { identifier, password });
+                    if(res.ok && res.json && res.json.token){
+                        localStorage.setItem('authToken', res.json.token);
+                        if(res.json.user) localStorage.setItem('authUser', JSON.stringify(res.json.user));
+                        if(res.json.redirect) window.location.href = res.json.redirect;
+                        else { closeModal(); location.reload(); }
+                    } else {
+                        const msg = (res.json && (res.json.message || res.json.error)) || (res.error && res.error.message) || 'Invalid credentials';
+                        showError(msg);
+                        submitBtn.textContent = origText;
+                        submitBtn.disabled = false;
+                    }
+                });
+
+                registerForm?.addEventListener('submit', async function(e){
+                    e.preventDefault();
+                    clearError();
+                    const submitBtn = registerForm.querySelector('button[type=submit]');
+                    const origText = submitBtn.textContent;
+                    submitBtn.textContent = 'Creating...';
+                    submitBtn.disabled = true;
+
+                    const name = document.getElementById('regName').value.trim();
+                    const phone = document.getElementById('regPhone').value.trim();
+                    const email = document.getElementById('regEmail').value.trim();
+                    const password = document.getElementById('regPassword').value;
+
+                    if(!name || !phone || !password){ showError('Name, phone and password are required'); submitBtn.textContent = origText; submitBtn.disabled = false; return; }
+
+                    const res = await postJSON('/api/auth/register', { name, phone, email, password });
+                    if(res.ok && res.json){
+                        if(res.json.token){
+                            localStorage.setItem('authToken', res.json.token);
+                            if(res.json.user) localStorage.setItem('authUser', JSON.stringify(res.json.user));
+                            if(res.json.redirect) window.location.href = res.json.redirect;
+                            else { closeModal(); location.reload(); }
+                        } else {
+                            showError(res.json.message || 'Account created. Please sign in.');
+                            submitBtn.textContent = origText;
+                            submitBtn.disabled = false;
+                            setActiveTab('login');
+                        }
+                    } else {
+                        const msg = (res.json && (res.json.message || res.json.error)) || (res.error && res.error.message) || 'Registration failed';
+                        showError(msg);
+                        submitBtn.textContent = origText;
+                        submitBtn.disabled = false;
+                    }
+                });
+            })();
+        </script>
+    </body>
+    </html>
