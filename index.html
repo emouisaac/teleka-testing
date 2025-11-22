@@ -339,6 +339,22 @@
             .hero-content1 { min-height: auto; }
         }
 
+        /* Small screens: show mobile menu, hide login button to avoid overlap */
+        @media (max-width: 768px) {
+            .nav-links { display: none; }
+            .mobile-menu { display: inline-flex; }
+            /* keep login button visible on small screens but compact it */
+            #loginBtn { display: inline-flex !important; padding: 4px !important; min-width: 30px; width: 30px; height:30px; border-radius:50%; justify-content:center; align-items:center; }
+            #loginBtn i { font-size: 0.85rem; }
+            /* hide header theme toggle and show mobile theme toggle inside nav */
+            #themeToggle { display: none !important; }
+            .nav-links .mobile-theme-toggle { display: block !important; padding: 12px 0; color: var(--text); }
+            /* show the login link inside the mobile nav when the panel opens */
+            .nav-links .mobile-login-link { display: block !important; padding: 12px 0; color: var(--text); }
+            .header-container { padding: 12px 16px; }
+            .hero { padding-top: 80px; }
+        }
+
         .hero-content p {
             font-size: 1.2rem;
             color: var(--text-light);
@@ -1019,6 +1035,10 @@
                 <a href="#booking">Booking</a>
                 <a href="#features">Features</a>
                 <a href="#contact">Contact</a>
+                <!-- Mobile-only login link (visible inside mobile nav) -->
+                <a href="#" id="mobileLoginLink" class="mobile-login-link" style="display:none;">Login</a>
+                <!-- Mobile-only theme toggle (icon-only) -->
+                <a href="#" id="mobileThemeToggle" class="mobile-theme-toggle" style="display:none;" aria-label="Toggle theme"> <i class="fas fa-moon" aria-hidden="true"></i></a>
             </nav>
             
             <div class="header-actions">
@@ -1046,6 +1066,7 @@
                 <h1>Professional Drivers</h1>
                 <h1>We are pocket-friendly</h1>
             </div>
+
         <div class="container hero-container">
 
             <div class="hero-content">
@@ -1057,6 +1078,7 @@
                 </div>
                 <!-- Removed demo stats -->
             </div>
+            
             <div class="hero-image">
                 <div class="hero-slideshow" aria-hidden="false">
                     <div class="slide"><img src="ims/customer.jpg" alt="Customer"></div>
@@ -1554,6 +1576,15 @@
                     themeIcon.classList.add('fa-moon');
                 }
             }
+            // also update mobile theme toggle icon if present
+            try{
+                const mobileTheme = document.getElementById('mobileThemeToggle');
+                const micon = mobileTheme ? mobileTheme.querySelector('i') : null;
+                if(micon){
+                    if(isDark){ micon.classList.remove('fa-moon'); micon.classList.add('fa-sun'); }
+                    else { micon.classList.remove('fa-sun'); micon.classList.add('fa-moon'); }
+                }
+            }catch(e){}
         }
         
         // Initialize theme on page load
@@ -1573,6 +1604,9 @@
         const mobileMenu = document.querySelector('.mobile-menu');
         const navLinks = document.querySelector('.nav-links');
         const navOverlay = document.getElementById('navOverlay');
+        const mobileLoginLink = document.getElementById('mobileLoginLink');
+        const mobileThemeToggle = document.getElementById('mobileThemeToggle');
+    
 
         // initialize accessibility attributes
         if (mobileMenu) mobileMenu.setAttribute('aria-expanded', 'false');
@@ -1598,6 +1632,35 @@
             // Hamburger only opens the mobile nav; closing is handled by the X button only
             mobileMenu.addEventListener('click', () => {
                 openMobileNav();
+            });
+        }
+
+        // Mobile login link should open the auth modal and close the nav
+        if(mobileLoginLink){
+            mobileLoginLink.addEventListener('click', function(e){
+                e.preventDefault();
+                try{ closeMobileNav(); } catch(e) {}
+                try{
+                    const raw = localStorage.getItem('authUser');
+                    if(!raw){ showModal('login'); return; }
+                    const user = JSON.parse(raw);
+                    const choice = window.confirm("Sign out from " + (user.name || user.phone) + "? Click OK to sign out, Cancel to keep signed in.");
+                    if(choice){ localStorage.removeItem('authToken'); localStorage.removeItem('authUser'); location.reload(); }
+                }catch(err){ showModal('login'); }
+            });
+        }
+
+        // wire mobile theme toggle inside the nav to the existing theme toggle behavior
+        if(mobileThemeToggle){
+            mobileThemeToggle.addEventListener('click', function(e){
+                e.preventDefault();
+                try{ closeMobileNav(); } catch(e) {}
+                // reuse existing toggle handler
+                const themeToggleBtn = document.getElementById('themeToggle');
+                if(themeToggleBtn){ themeToggleBtn.click(); return; }
+                // fallback: toggle dark-mode and update icons
+                const isDark = document.body.classList.toggle('dark-mode');
+                updateThemeIcon(isDark);
             });
         }
 
@@ -2008,12 +2071,15 @@
                         }
                         const user = JSON.parse(raw);
                         const display = (user && (user.name || user.phone)) ? (user.name || user.phone) : 'Account';
-                        openBtn.textContent = display;
+                                openBtn.textContent = display;
+                                // also update mobile link if present
+                                try{ const m = document.getElementById('mobileLoginLink'); if(m) m.textContent = display; }catch(e){}
                         openBtn.classList.add('user-btn');
                         openBtn.setAttribute('aria-label','User menu');
                     }catch(e){
                         openBtn.textContent = 'Login';
                         openBtn.classList.remove('user-btn');
+                                try{ const m = document.getElementById('mobileLoginLink'); if(m) m.textContent = 'Login'; }catch(e){}
                     }
                 }
 
@@ -2041,6 +2107,24 @@
 
                 // initialize auth UI on load
                 updateAuthUI();
+                // adapt login button appearance for small screens (icon-only) and restore on larger screens
+                function adaptLoginForSmallScreens(){
+                    try{
+                        const btn = document.getElementById('loginBtn');
+                        if(!btn) return;
+                        if(window.innerWidth <= 768){
+                            if(!btn.dataset.origText) btn.dataset.origText = btn.textContent;
+                            // replace content with user icon for compact display
+                            btn.innerHTML = '<i class="fas fa-user" aria-hidden="true"></i>';
+                            btn.setAttribute('aria-label', 'Open login');
+                        } else {
+                            if(btn.dataset.origText){ btn.textContent = btn.dataset.origText; delete btn.dataset.origText; }
+                            btn.setAttribute('aria-label', 'Open login');
+                        }
+                    }catch(e){}
+                }
+                adaptLoginForSmallScreens();
+                window.addEventListener('resize', adaptLoginForSmallScreens);
                 closeBtn?.addEventListener('click', closeModal);
                 backdrop?.addEventListener('click', function(e){ if(e.target === backdrop) closeModal(); });
                 tabs.forEach(t => t.addEventListener('click', () => setActiveTab(t.getAttribute('data-target'))));
