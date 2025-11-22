@@ -6,6 +6,8 @@
     <title>Teleka Taxi | Entebbe International Airport & City Services</title>
     <link rel="icon" href="ims/1110.png" type="image/x-icon">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8775748904134067"
+     crossorigin="anonymous"></script>
     <style>
         :root {
             --primary: #2549eb;
@@ -1132,14 +1134,6 @@
                 <h2>Book Your Ride</h2>
                 <p>Fill out the form below to book your taxi</p>
                 <form id="bookingForm">
-                    <div class="form-group">
-                        <label for="name">Your Name</label>
-                        <input type="text" id="name" class="form-control" placeholder="Enter your name" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="email">Email Address (Optional)</label>
-                        <input type="email" id="email" class="form-control" placeholder="Enter your email">
-                    </div>
                     <!-- WhatsApp input removed -->
                     <div class="form-group">
                         <label for="pickup">Pickup Location</label>
@@ -1156,8 +1150,8 @@
                             </div>
                         </div>
                     <div class="form-group">
-                        <label for="serviceType">Service Type</label>
-                        <select id="serviceType" class="form-control" required>
+                        <label for="serviceType">Service Type (Optional)</label>
+                        <select id="serviceType" class="form-control">
                             <option value="">Select service</option>
                             <option value="airport">Airport Transfer</option>
                             <option value="city">City Ride</option>
@@ -1683,10 +1677,24 @@
             const originalBtnText = submitBtn ? submitBtn.textContent : 'Book Now';
             if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submitting...'; }
 
-            // Collect form data (WhatsApp removed)
+            // Collect form data and use registered user details when available
+            let authUser = null;
+            try { authUser = JSON.parse(localStorage.getItem('authUser') || 'null'); } catch (e) { authUser = null; }
+            const userName = authUser ? (authUser.name || authUser.phone || '') : '';
+            const userEmail = authUser ? (authUser.email || '') : '';
+
+            // If there's no authenticated user, prompt to sign in/register
+            if (!userName) {
+                alert('Please sign in or register before booking.');
+                const loginBtn = document.getElementById('loginBtn');
+                if (loginBtn) { loginBtn.click(); }
+                if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = originalBtnText; }
+                return;
+            }
+
             const formData = {
-                name: document.getElementById('name').value,
-                email: document.getElementById('email').value,
+                name: userName,
+                email: userEmail,
                 pickup: document.getElementById('pickup').value,
                 destination: document.getElementById('destination').value,
                 serviceType: document.getElementById('serviceType').value,
