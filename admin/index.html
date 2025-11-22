@@ -559,6 +559,57 @@
                 width: 95%;
                 padding: 20px;
             }
+
+            /* Responsive table: collapse into stacked cards on small screens */
+            .bookings-table-container table,
+            .bookings-table-container thead,
+            .bookings-table-container tbody,
+            .bookings-table-container th,
+            .bookings-table-container td,
+            .bookings-table-container tr {
+                display: block;
+            }
+
+            .bookings-table-container thead {
+                display: none;
+            }
+
+            .bookings-table-container tbody tr {
+                background: white;
+                margin-bottom: 12px;
+                border-radius: 8px;
+                padding: 10px;
+                box-shadow: var(--shadow);
+            }
+
+            .bookings-table-container td {
+                padding: 8px 10px;
+                border: none;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+
+            .bookings-table-container td::before {
+                content: attr(data-label);
+                display: inline-block;
+                font-weight: 700;
+                color: var(--text-light);
+                margin-right: 12px;
+                text-transform: uppercase;
+                font-size: 0.75rem;
+                flex: 0 0 40%;
+            }
+
+            .bookings-table-container td > * {
+                flex: 1 1 auto;
+                text-align: right;
+            }
+
+            .bookings-table-container .action-buttons {
+                justify-content: flex-end;
+                gap: 8px;
+            }
         }
     </style>
 </head>
@@ -760,14 +811,14 @@
 
             tbody.innerHTML = bookings.map((booking, index) => `
                 <tr>
-                    <td><strong>${booking.name}</strong></td>
-                    <td>${booking.email || 'N/A'}</td>
-                    <td>${booking.pickup}</td>
-                    <td>${booking.destination}</td>
-                    <td>${formatDateTime(booking.date, booking.time)}</td>
-                    <td>${booking.serviceType}</td>
-                    <td><span class="badge badge-${booking.status || 'pending'}">${booking.status || 'Pending'}</span></td>
-                    <td>
+                    <td data-label="Name"><strong>${booking.name}</strong></td>
+                    <td data-label="Email">${booking.email || 'N/A'}</td>
+                    <td data-label="Pickup">${booking.pickup}</td>
+                    <td data-label="Destination">${booking.destination}</td>
+                    <td data-label="Date & Time">${formatDateTime(booking.date, booking.time)}</td>
+                    <td data-label="Service">${booking.serviceType}</td>
+                    <td data-label="Status"><span class="badge badge-${booking.status || 'pending'}">${booking.status || 'Pending'}</span></td>
+                    <td data-label="Actions">
                         <div class="action-buttons">
                             <button class="action-btn action-btn-view" onclick="viewDetail(${index})">View</button>
                             <button class="action-btn action-btn-delete" onclick="deleteBooking(${index})">Delete</button>

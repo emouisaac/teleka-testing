@@ -1035,8 +1035,7 @@
                 <a href="#booking">Booking</a>
                 <a href="#features">Features</a>
                 <a href="#contact">Contact</a>
-                <!-- Mobile-only login link (visible inside mobile nav) -->
-                <a href="#" id="mobileLoginLink" class="mobile-login-link" style="display:none;">Login</a>
+                <!-- Mobile-only login link removed (not used) -->
                 <!-- Mobile-only theme toggle (icon-only) -->
                 <a href="#" id="mobileThemeToggle" class="mobile-theme-toggle" style="display:none;" aria-label="Toggle theme"> <i class="fas fa-moon" aria-hidden="true"></i></a>
             </nav>
@@ -1604,7 +1603,6 @@
         const mobileMenu = document.querySelector('.mobile-menu');
         const navLinks = document.querySelector('.nav-links');
         const navOverlay = document.getElementById('navOverlay');
-        const mobileLoginLink = document.getElementById('mobileLoginLink');
         const mobileThemeToggle = document.getElementById('mobileThemeToggle');
     
 
@@ -1635,20 +1633,7 @@
             });
         }
 
-        // Mobile login link should open the auth modal and close the nav
-        if(mobileLoginLink){
-            mobileLoginLink.addEventListener('click', function(e){
-                e.preventDefault();
-                try{ closeMobileNav(); } catch(e) {}
-                try{
-                    const raw = localStorage.getItem('authUser');
-                    if(!raw){ showModal('login'); return; }
-                    const user = JSON.parse(raw);
-                    const choice = window.confirm("Sign out from " + (user.name || user.phone) + "? Click OK to sign out, Cancel to keep signed in.");
-                    if(choice){ localStorage.removeItem('authToken'); localStorage.removeItem('authUser'); location.reload(); }
-                }catch(err){ showModal('login'); }
-            });
-        }
+        // (mobile login link removed)
 
         // wire mobile theme toggle inside the nav to the existing theme toggle behavior
         if(mobileThemeToggle){
@@ -2071,15 +2056,12 @@
                         }
                         const user = JSON.parse(raw);
                         const display = (user && (user.name || user.phone)) ? (user.name || user.phone) : 'Account';
-                                openBtn.textContent = display;
-                                // also update mobile link if present
-                                try{ const m = document.getElementById('mobileLoginLink'); if(m) m.textContent = display; }catch(e){}
+                            openBtn.textContent = display;
                         openBtn.classList.add('user-btn');
                         openBtn.setAttribute('aria-label','User menu');
                     }catch(e){
                         openBtn.textContent = 'Login';
                         openBtn.classList.remove('user-btn');
-                                try{ const m = document.getElementById('mobileLoginLink'); if(m) m.textContent = 'Login'; }catch(e){}
                     }
                 }
 
