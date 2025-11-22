@@ -665,6 +665,7 @@
                         <i class="fas fa-trash"></i>
                         Clear All
                     </button>
+                    <button class="btn" id="enableSoundBtn" title="Enable sound notifications">🔔</button>
                     <button type="button" class="btn btn-outline" id="loginBtn">Login</button>
                 </div>
             </div>
@@ -996,13 +997,65 @@
         // Real-time notifications via Server-Sent Events
         (function initSSE() {
             if (!window.EventSource) return;
+            // Audio helper: try to use an unlocked AudioContext created on user gesture
+            function unlockAudio(){
+                try{
+                    if(window.__sseAudioCtx) return true;
+                    const C = window.AudioContext || window.webkitAudioContext;
+                    if(!C) return false;
+                    const ctx = new C();
+                    const g = ctx.createGain(); g.gain.value = 0.002;
+                    g.connect(ctx.destination);
+                    window.__sseAudioCtx = ctx;
+                    window.__sseAudioGain = g;
+                    console.log('[sse] audio unlocked');
+                    return true;
+                }catch(e){ console.warn('[sse] unlockAudio failed', e); return false; }
+            }
+
+            function playBeep(){
+                try{
+                    if(window.__sseAudioCtx){
+                        const ctx = window.__sseAudioCtx;
+                        const o = ctx.createOscillator();
+                        o.type = 'sine'; o.frequency.value = 880;
+                        o.connect(window.__sseAudioGain || ctx.destination);
+                        o.start();
+                        setTimeout(()=>{ try{ o.stop(); }catch(e){} }, 220);
+                        return;
+                    }
+                    // fallback ephemeral context (may be blocked by autoplay policies)
+                    const ctx2 = new (window.AudioContext || window.webkitAudioContext)();
+                    const o2 = ctx2.createOscillator();
+                    const g2 = ctx2.createGain(); g2.gain.value = 0.0015;
+                    o2.connect(g2); g2.connect(ctx2.destination);
+                    o2.start();
+                    setTimeout(()=>{ o2.stop(); try{ ctx2.close(); }catch(e){} }, 220);
+                }catch(e){ console.warn('beep failed', e); }
+            }
+
+            // small visual toast
+            function showToast(msg){
+                try{
+                    const t = document.createElement('div');
+                    t.className = 'sse-toast';
+                    t.textContent = msg;
+                    Object.assign(t.style, {
+                        position: 'fixed', right: '16px', top: '16px', background: 'var(--primary)', color: '#fff', padding: '10px 14px', borderRadius: '8px', boxShadow: '0 6px 18px rgba(0,0,0,0.12)', zIndex: 3000, fontWeight: 700
+                    });
+                    document.body.appendChild(t);
+                    setTimeout(()=>{ t.style.opacity = '0'; t.style.transform = 'translateY(-6px)'; setTimeout(()=>t.remove(),300); }, 4000);
+                }catch(e){}
+            }
+
             try {
                 const es = new EventSource('/api/bookings/stream');
                 es.addEventListener('new-booking', (ev) => {
                     try {
                         const booking = JSON.parse(ev.data);
-                        // Simple notification and refresh
-                        alert('New booking received: ' + (booking.name || '')); 
+                        // Play short beep and show a small toast, then refresh the table
+                        playBeep();
+                        showToast('New booking: ' + (booking.name || ''));
                         loadBookings();
                     } catch (err) {
                         console.log('Malformed booking SSE payload', err);
@@ -1182,6 +1235,20 @@
 
             // initialize
             updateAuthUI();
+
+            // wire enable sound button
+            const enableSoundBtn = document.getElementById('enableSoundBtn');
+            enableSoundBtn?.addEventListener('click', function(e){
+                try{
+                    const ok = unlockAudio();
+                    if(ok) {
+                        enableSoundBtn.textContent = '🔔 On';
+                        enableSoundBtn.classList.add('btn-success');
+                    } else {
+                        enableSoundBtn.textContent = '🔕';
+                    }
+                }catch(ex){ console.warn('enableSound failed', ex); }
+            });
 
             // Clear login inputs to avoid browser autofill values and ensure no prefilled credentials
             try{
