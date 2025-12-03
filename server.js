@@ -559,6 +559,8 @@ async function sendSMS(phoneNumber, message){
 
 // --- Email sending (SMTP via nodemailer) ---
 let _mailTransporter = null;
+let _mailTestDone = false;
+
 function getMailTransporter() {
   if (_mailTransporter) return _mailTransporter;
   const host = process.env.SMTP_HOST;
@@ -577,28 +579,50 @@ function getMailTransporter() {
       host,
       port: port || 587,
       secure: !!secure,
-      auth: { user, pass }
+      auth: { user, pass },
+      connectionUrl: `smtp${secure ? 's' : ''}://${user}:***@${host}:${port || 587}`
     });
+    
+    // Verify connection at first use (async, non-blocking)
+    if (!_mailTestDone) {
+      _mailTestDone = true;
+      _mailTransporter.verify((err, success) => {
+        if (err) {
+          console.warn('[email] SMTP verify failed (will retry on send):', err && err.message ? err.message : err);
+        } else {
+          console.log('[email] ✓ SMTP connection verified');
+        }
+      });
+    }
+    
     return _mailTransporter;
   } catch (e) {
-    console.error('[email] Failed to create mail transporter', e);
+    console.error('[email] Failed to create mail transporter:', e && e.message ? e.message : e);
     return null;
   }
 }
 
 async function sendEmail(to, subject, text, html) {
   try {
+    if (!to || !subject) {
+      console.warn('[email] skipping: missing to or subject');
+      return null;
+    }
     const transporter = getMailTransporter();
     const from = process.env.EMAIL_FROM || process.env.SMTP_USER || `no-reply@${process.env.DOMAIN || 'telekataxi.com'}`;
     if (!transporter) {
-      console.log('[email] (dry-run) would send email', { to, subject, from, text });
-      return;
+      console.log('[email] (dry-run) would send email to', to, 'subject:', subject.slice(0, 50));
+      return null;
     }
+    console.log('[email] sending to', to, '...');
     const info = await transporter.sendMail({ from, to, subject, text, html });
-    console.log('[email] sent:', info && info.messageId ? info.messageId : info);
+    console.log('[email] ✓ SUCCESS messageId:', info && info.messageId ? info.messageId : 'unknown');
     return info;
   } catch (e) {
-    console.error('[email] sendEmail failed', e && e.message ? e.message : e);
+    console.error('[email] ✗ FAILED to send:', e && e.message ? e.message : String(e));
+    if (e && e.code) console.error('[email] Error code:', e.code);
+    if (e && e.response) console.error('[email] SMTP response:', e.response);
+    return null; // Return null instead of throwing to prevent crash
   }
 }
 
@@ -1020,6 +1044,9 @@ app.listen(PORT, '0.0.0.0', () => {
   }
   // Log VAPID key status
   console.log('[startup] Web Push VAPID:', process.env.VAPID_PUBLIC_KEY ? '✓ configured (persistent)' : '⚠️  ephemeral (generated fresh, will break existing subscriptions on restart)');
+  // Log SMTP configuration for debugging
+  console.log('[startup] SMTP:', process.env.SMTP_HOST ? `✓ ${process.env.SMTP_HOST}:${process.env.SMTP_PORT || '587'}` : '❌ not configured');
+  console.log('[startup] Admin emails:', process.env.ADMIN_EMAILS ? `✓ ${process.env.ADMIN_EMAILS}` : '❌ not configured');
   console.log(`Teleka Taxi server running on http://0.0.0.0:${PORT} (accessible from all network interfaces)`);
   console.log(`  - Local: http://localhost:${PORT}`);
   console.log(`  - Network: http://<your-domain-or-ip>:${PORT}`);
