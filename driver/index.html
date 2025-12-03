@@ -863,6 +863,38 @@
                 `${driverLocation.lat.toFixed(4)}, ${driverLocation.lng.toFixed(4)}`;
         }
 
+        // Handle native push notifications from webview
+        window.onNativePush = function(payload) {
+          // Show system notification if supported and permitted
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification(payload.title || 'Notification', {
+              body: payload.body || '',
+              icon: '../ims/1110.png',
+              requireInteraction: true
+            });
+          } else {
+            alert('New notification: ' + (payload.title || 'Notification'));
+          }
+
+          // Play a simple ringtone (web audio)
+          try {
+            var ctx = window.__nativeAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+            window.__nativeAudioCtx = ctx;
+            if (ctx.state === 'suspended' && ctx.resume) ctx.resume();
+            var o = ctx.createOscillator();
+            var g = ctx.createGain();
+            o.type = 'sine';
+            o.frequency.value = 880;
+            g.gain.value = 0.5;
+            o.connect(g);
+            g.connect(ctx.destination);
+            o.start();
+            o.stop(ctx.currentTime + 0.4);
+          } catch (e) {
+            // If audio fails, ignore
+          }
+        };
+
         // Load requests
         async function loadRequests() {
             try {

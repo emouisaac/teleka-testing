@@ -38,5 +38,25 @@
     "salt": "12e6abf2659578b5c5a661ca30f1002a",
     "createdAt": "2025-11-21T19:49:17.438Z",
     "updatedAt": "2025-11-21T19:49:17.438Z"
+  },
+  {
+    "id": "1764701711985",
+    "name": "grace",
+    "phone": "788608032",
+    "email": "acangrace769@gmail.com",
+    "passwordHash": "09386dd1e0141a0d2a79ad776d129b91df733e7ac6cde52e65e93242192825e95cceb98391ffd9fc2e6a524e3f0f5f42112a68444762b84089c9b7a90b3fd71a",
+    "salt": "938d26754e33fcabd04285ea15d48f09",
+    "createdAt": "2025-12-02T18:55:11.985Z",
+    "updatedAt": "2025-12-02T18:55:11.985Z"
+  },
+  {
+    "id": "1764738363754",
+    "name": "teleka test",
+    "phone": "0780000000",
+    "email": "telekataxi@gmail.com",
+    "passwordHash": "01cc11888acaeca7655e0bd3a898a65214cf21f0b135f49c243fe68b84964104fd4160b69e03f6a4db5accb542b29530b2399d044ee5031b048720ca5edf36ac",
+    "salt": "97b7d4019594ef1a7c8948abef417b4d",
+    "createdAt": "2025-12-03T05:06:03.754Z",
+    "updatedAt": "2025-12-03T05:06:03.754Z"
   }
 ]

@@ -1058,9 +1058,9 @@
     <!-- Hero Section -->
     <section class="hero" id="home">
         <div class="hero-content1">
+                <h1>Reliable Taxi Service</h1>
+                <h1>for Airport & City Rides</h1>
                 <h1>Entebbe Airport Transfers</h1>
-                <h1>Book Your Ride Now</h1>
-                <h1>City Rides</h1>
                 <h1>Business Trips</h1>
                 <h1>Tours and Travel</h1>
                 <h1>24/7 Availability</h1>
@@ -1727,6 +1727,7 @@
 
                 const created = await resp.json();
                 alert('Thank you, ' + (created.name || '') + '! Your booking was submitted.');
+                try{ if(window.registerMyBooking && created && created._id) window.registerMyBooking(created._id); }catch(e){}
                 bookingForm.reset();
             } catch (error) {
                 console.error('Booking error:', error);
@@ -2183,6 +2184,215 @@
                     }
                 });
             })();
+        </script>
+
+        <!-- Real-time user notification listener -->
+        <script>
+            (function(){
+                function userUnlockAudio(){
+                    try{
+                        if(window.__userAudioCtx) return true;
+                        const C = window.AudioContext || window.webkitAudioContext;
+                        if(!C) return false;
+                        const ctx = new C();
+                        const g = ctx.createGain(); g.gain.value = 0.5; g.connect(ctx.destination);
+                        window.__userAudioCtx = ctx; window.__userAudioGain = g;
+                        if(ctx.state === 'suspended' && typeof ctx.resume === 'function') ctx.resume();
+                        return true;
+                    }catch(e){ console.warn('userUnlockAudio failed', e); return false; }
+                }
+
+                function userPlayRingtone(){
+                    try{
+                        const C = window.AudioContext || window.webkitAudioContext;
+                        let ctx = window.__userAudioCtx;
+                        if(!ctx && C) { try{ ctx = new C(); const g = ctx.createGain(); g.gain.value = 0.5; g.connect(ctx.destination); window.__userAudioCtx = ctx; window.__userAudioGain = g; }catch(e){} }
+                        if(!ctx) return;
+                        if(ctx.state === 'suspended' && typeof ctx.resume === 'function') ctx.resume();
+                        const now = ctx.currentTime;
+                        const freqs = [880, 660, 880];
+                        const globalGain = window.__userAudioGain || ctx.createGain();
+                        freqs.forEach((f, i) => {
+                            const o = ctx.createOscillator();
+                            const g = ctx.createGain();
+                            o.type = 'sine'; o.frequency.value = f;
+                            const start = now + i * 0.22;
+                            g.gain.setValueAtTime(0, start);
+                            g.gain.linearRampToValueAtTime(0.9, start + 0.02);
+                            g.gain.linearRampToValueAtTime(0.0, start + 0.24);
+                            o.connect(g);
+                            if (globalGain && typeof globalGain.connect === 'function') g.connect(globalGain); else g.connect(ctx.destination);
+                            o.start(start); o.stop(start + 0.26);
+                        });
+                    }catch(e){ console.warn('userPlayRingtone failed', e); }
+                }
+
+                window.testUserRingtone = function(){ if(userUnlockAudio()) userPlayRingtone(); };
+
+                function createUserPopup(){
+                    if(document.getElementById('userNotifyPopup')) return;
+                    const el = document.createElement('div');
+                    el.id = 'userNotifyPopup';
+                    el.style.position = 'fixed';
+                    el.style.right = '20px';
+                    el.style.bottom = '20px';
+                    el.style.zIndex = 99999;
+                    el.style.maxWidth = '320px';
+                    el.style.background = 'linear-gradient(180deg,#fff,#f8fafc)';
+                    el.style.border = '1px solid rgba(0,0,0,0.08)';
+                    el.style.boxShadow = '0 8px 24px rgba(2,6,23,0.16)';
+                    el.style.borderRadius = '12px';
+                    el.style.padding = '12px 14px';
+                    el.style.display = 'none';
+                    el.style.cursor = 'pointer';
+                    el.innerHTML = `<strong id="userNotifyTitle" style="display:block;margin-bottom:6px;font-size:1rem;color:#0f172a">Notification</strong><div id="userNotifyBody" style="font-size:0.95rem;color:#334155"></div>`;
+                    el.addEventListener('click', () => { el.style.display = 'none'; try{ if(window.__lastUserNotification && typeof window.__lastUserNotification.close === 'function') window.__lastUserNotification.close(); }catch(e){} });
+                    document.body.appendChild(el);
+                }
+
+                function showUserPopup(title, body){
+                    try{
+                        createUserPopup();
+                        const el = document.getElementById('userNotifyPopup');
+                        document.getElementById('userNotifyTitle').textContent = title;
+                        document.getElementById('userNotifyBody').textContent = body;
+                        el.style.display = 'block';
+                        setTimeout(() => { try{ el.style.display = 'none'; }catch(e){} }, 20000);
+                    }catch(e){ console.warn('showUserPopup failed', e); }
+                }
+
+                try{
+                    let userSseUrl = '/api/notifications/stream?role=user';
+                    try{ const raw = localStorage.getItem('authUser'); const user = raw ? JSON.parse(raw) : null; if(user && user.email) userSseUrl += '&email=' + encodeURIComponent(user.email); }catch(e){}
+                    try{ const myBooking = sessionStorage.getItem('myBookingId'); if(myBooking) userSseUrl += '&bookingId=' + encodeURIComponent(myBooking); }catch(e){}
+                    const es = new EventSource(userSseUrl);
+                    es.addEventListener('open', () => console.log('[sse:user] connected'));
+                    es.addEventListener('error', (e) => { /* ignore */ });
+                    es.addEventListener('booking-confirmed', (ev) => {
+                        try{
+                            const data = JSON.parse(ev.data || '{}');
+                            const booking = data.booking || {};
+                            const raw = localStorage.getItem('authUser');
+                            let user = null;
+                            try{ user = raw ? JSON.parse(raw) : null; }catch(e){ user = null; }
+                            const userEmail = user && user.email ? (user.email||'').toLowerCase() : '';
+                            const userPhone = user && user.phone ? (user.phone||'') : '';
+                            const bookingEmail = (booking.email||'').toLowerCase();
+                            const bookingPhone = booking.phone || '';
+                            const matches = (user && (userEmail && bookingEmail && userEmail === bookingEmail)) || (user && userPhone && bookingPhone && userPhone === bookingPhone) || false;
+                            const myBookingId = sessionStorage.getItem('myBookingId');
+                            const isMyBooking = myBookingId && booking._id && myBookingId === String(booking._id);
+                            if(matches || isMyBooking){
+                                const title = 'Your booking was confirmed';
+                                const body = `${booking.name || 'Your booking'} — ${booking.pickup} → ${booking.destination}`;
+                                try{ if(userUnlockAudio()) userPlayRingtone(); }catch(e){}
+                                showUserPopup(title, body);
+                                try{ if('Notification' in window && Notification.permission === 'granted'){ const n = new Notification(title, { body, icon: '/ims/1110.png', requireInteraction: true }); window.__lastUserNotification = n; } }catch(e){}
+                            }
+                        }catch(e){ console.warn('[sse:user] booking-confirmed handler error', e); }
+                    });
+                }catch(e){ console.warn('EventSource not available', e); }
+
+                window.registerMyBooking = function(id){ try{ sessionStorage.setItem('myBookingId', String(id)); }catch(e){} };
+            })();
+            // Handle push messages forwarded from Service Worker when page is open
+            try{
+                if(navigator.serviceWorker && navigator.serviceWorker.addEventListener){
+                    navigator.serviceWorker.addEventListener('message', (ev) => {
+                        try{
+                            const msg = ev.data || {};
+                            if(!msg || msg.type !== 'push') return;
+                            const payload = msg.data || {};
+                            const booking = payload.booking || (payload.data && payload.data.booking);
+                            const title = payload.title || payload.body || 'Booking Update';
+                            const body = payload.body || (booking ? `${booking.name || 'Your booking'} — ${booking.pickup} → ${booking.destination}` : 'You have a new notification');
+                            try{ if(userUnlockAudio()) userPlayRingtone(); }catch(e){}
+                            showUserPopup(title, body);
+                            try{ if('Notification' in window && Notification.permission === 'granted'){ const n = new Notification(title, { body, icon: '/ims/1110.png', requireInteraction: true }); window.__lastUserNotification = n; } }catch(e){}
+                        }catch(err){ console.warn('[push:user] message handler error', err); }
+                    });
+                }
+            }catch(e){ console.warn('user serviceWorker message listener failed', e); }
+        </script>
+        <script>
+            // Web Push subscription for users
+            (function(){
+                function urlBase64ToUint8Array(base64String) {
+                    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+                    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+                    const rawData = window.atob(base64);
+                    const outputArray = new Uint8Array(rawData.length);
+                    for (let i = 0; i < rawData.length; ++i) {
+                        outputArray[i] = rawData.charCodeAt(i);
+                    }
+                    return outputArray;
+                }
+
+                async function subscribePushForUser(){
+                    try{
+                        if (!('serviceWorker' in navigator)) return;
+                        const reg = await navigator.serviceWorker.register('/sw.js');
+                        // get VAPID public key
+                        const res = await fetch('/api/push/vapidPublicKey');
+                        const json = await res.json();
+                        const publicKey = json.publicKey;
+                        if(!publicKey) return;
+                        // request notification permission
+                        if (Notification.permission === 'default') {
+                            await Notification.requestPermission();
+                        }
+                        if (Notification.permission !== 'granted') return;
+                        const sub = await reg.pushManager.subscribe({
+                            userVisibleOnly: true,
+                            applicationServerKey: urlBase64ToUint8Array(publicKey)
+                        });
+                        // send subscription to server with user email if available
+                        let email = '';
+                        try{ const user = JSON.parse(localStorage.getItem('authUser') || 'null'); if(user && user.email) email = user.email; }catch(e){}
+                        await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ subscription: sub, email: email, role: 'user' }) });
+                        console.log('[push:user] subscribed');
+                    }catch(e){ console.warn('[push:user] subscribe failed', e); }
+                }
+
+                // Try to subscribe on a user gesture (booking submit or page click)
+                function trySubscribeOnce(){ try{ subscribePushForUser(); document.removeEventListener('pointerdown', trySubscribeOnce); }catch(e){} }
+                document.addEventListener('pointerdown', trySubscribeOnce, { once: true });
+                // also attempt on load (if permissions already granted)
+                window.addEventListener('load', () => { try{ if(Notification.permission === 'granted') subscribePushForUser(); }catch(e){} });
+                window.subscribePushForUser = subscribePushForUser;
+            })();
+        </script>
+        <script>
+window.onNativePush = function(payload) {
+  // Show system notification if supported and permitted
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification(payload.title || 'Notification', {
+      body: payload.body || '',
+      icon: '/ims/1110.png',
+      requireInteraction: true
+    });
+  } else {
+    alert('New notification: ' + (payload.title || 'Notification'));
+  }
+
+  // Play a simple ringtone (web audio)
+  try {
+    var ctx = window.__nativeAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    window.__nativeAudioCtx = ctx;
+    if (ctx.state === 'suspended' && ctx.resume) ctx.resume();
+    var o = ctx.createOscillator();
+    var g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.value = 880;
+    g.gain.value = 0.5;
+    o.connect(g);
+    g.connect(ctx.destination);
+    o.start();
+    o.stop(ctx.currentTime + 0.4);
+  } catch (e) {
+    // If audio fails, ignore
+  }
+};
         </script>
 </body>
 </html>
