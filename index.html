@@ -1231,12 +1231,6 @@
                         <p>24/7 Customer Support</p>
                     </div>
                     <!-- WhatsApp contact removed -->
-                    <div class="contact-card contact-card--clickable" role="button" tabindex="0" data-type="email" data-value="info@teleka.com">
-                        <i class="fas fa-envelope"></i>
-                        <h3>Email</h3>
-                        <p class="contact-value">info@teleka.com</p>
-                        <p>For Bookings & Inquiries</p>
-                    </div>
                 </div>
             </div>
         </div>
@@ -1681,7 +1675,6 @@
             let authUser = null;
             try { authUser = JSON.parse(localStorage.getItem('authUser') || 'null'); } catch (e) { authUser = null; }
             const userName = authUser ? (authUser.name || authUser.phone || '') : '';
-            const userEmail = authUser ? (authUser.email || '') : '';
 
             // If there's no authenticated user, prompt to sign in/register
             if (!userName) {
@@ -1694,7 +1687,6 @@
 
             const formData = {
                 name: userName,
-                email: userEmail,
                 pickup: document.getElementById('pickup').value,
                 destination: document.getElementById('destination').value,
                 serviceType: document.getElementById('serviceType').value,
@@ -1710,7 +1702,6 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         name: formData.name,
-                        email: formData.email,
                         pickup: formData.pickup,
                         destination: formData.destination,
                         serviceType: formData.serviceType,
@@ -1804,7 +1795,7 @@
             function openModal(type, value) {
                 modal.setAttribute('aria-hidden', 'false');
                 modal.classList.add('open');
-                modalDetails.innerHTML = `<div style="margin-bottom:8px"><strong>${type === 'email' ? 'Email' : 'Phone'}</strong></div><div class="contact-value">${value}</div>`;
+                modalDetails.innerHTML = `<div style="margin-bottom:8px"><strong>Phone</strong></div><div class="contact-value">${value}</div>`;
                 modalActions.innerHTML = '';
 
                 if (type === 'phone' || type === 'whatsapp') {
@@ -1819,20 +1810,6 @@
                     smsBtn.href = `sms:${value.replace(/\s+/g,'')}`;
                     smsBtn.textContent = 'Send SMS';
                     modalActions.appendChild(smsBtn);
-                } else if (type === 'email') {
-                    const mailBtn = document.createElement('a');
-                    mailBtn.className = 'btn';
-                    mailBtn.href = `mailto:${value}`;
-                    mailBtn.textContent = 'Send Email';
-                    modalActions.appendChild(mailBtn);
-
-                    const copyBtn = document.createElement('button');
-                    copyBtn.className = 'btn btn-outline';
-                    copyBtn.textContent = 'Copy Email';
-                    copyBtn.addEventListener('click', () => {
-                        navigator.clipboard?.writeText(value).then(() => alert('Email copied to clipboard'));
-                    });
-                    modalActions.appendChild(copyBtn);
                 }
 
                 // Trap focus loosely by focusing close button
@@ -1947,8 +1924,8 @@
 
                     <form class="auth-form" id="loginForm" data-form="login">
                         <div class="form-group">
-                            <label for="loginEmail">Email or Phone</label>
-                            <input id="loginEmail" name="identifier" type="text" placeholder="you@example.com or 2567xxxxxxx" required>
+                            <label for="loginPhone">Phone or Admin ID</label>
+                            <input id="loginPhone" name="identifier" type="text" placeholder="2567xxxxxxx or admin" required>
                         </div>
                         <div class="form-group">
                             <label for="loginPassword">Password</label>
@@ -1968,10 +1945,6 @@
                         <div class="form-group">
                             <label for="regPhone">Phone</label>
                             <input id="regPhone" name="phone" type="text" placeholder="2567xxxxxxx" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="regEmail">Email</label>
-                            <input id="regEmail" name="email" type="email" placeholder="you@example.com">
                         </div>
                         <div class="form-group">
                             <label for="regPassword">Password</label>
@@ -2128,7 +2101,7 @@
                     submitBtn.textContent = 'Signing in...';
                     submitBtn.disabled = true;
 
-                    const identifier = document.getElementById('loginEmail').value.trim();
+                    const identifier = document.getElementById('loginPhone').value.trim();
                     const password = document.getElementById('loginPassword').value;
                     if(!identifier || !password){ showError('Please enter both identifier and password'); submitBtn.textContent = origText; submitBtn.disabled = false; return; }
 
@@ -2156,12 +2129,11 @@
 
                     const name = document.getElementById('regName').value.trim();
                     const phone = document.getElementById('regPhone').value.trim();
-                    const email = document.getElementById('regEmail').value.trim();
                     const password = document.getElementById('regPassword').value;
 
                     if(!name || !phone || !password){ showError('Name, phone and password are required'); submitBtn.textContent = origText; submitBtn.disabled = false; return; }
 
-                    const res = await postJSON('/api/auth/register', { name, phone, email, password });
+                    const res = await postJSON('/api/auth/register', { name, phone, password });
                     if(res.ok && res.json){
                         // If server returns token, store and redirect; otherwise show success and switch to login
                         if(res.json.token){
@@ -2263,7 +2235,6 @@
 
                 try{
                     let userSseUrl = '/api/notifications/stream?role=user';
-                    try{ const raw = localStorage.getItem('authUser'); const user = raw ? JSON.parse(raw) : null; if(user && user.email) userSseUrl += '&email=' + encodeURIComponent(user.email); }catch(e){}
                     try{ const myBooking = sessionStorage.getItem('myBookingId'); if(myBooking) userSseUrl += '&bookingId=' + encodeURIComponent(myBooking); }catch(e){}
                     const es = new EventSource(userSseUrl);
                     es.addEventListener('open', () => console.log('[sse:user] connected'));
@@ -2275,11 +2246,9 @@
                             const raw = localStorage.getItem('authUser');
                             let user = null;
                             try{ user = raw ? JSON.parse(raw) : null; }catch(e){ user = null; }
-                            const userEmail = user && user.email ? (user.email||'').toLowerCase() : '';
                             const userPhone = user && user.phone ? (user.phone||'') : '';
-                            const bookingEmail = (booking.email||'').toLowerCase();
                             const bookingPhone = booking.phone || '';
-                            const matches = (user && (userEmail && bookingEmail && userEmail === bookingEmail)) || (user && userPhone && bookingPhone && userPhone === bookingPhone) || false;
+                            const matches = (user && userPhone && bookingPhone && userPhone === bookingPhone) || false;
                             const myBookingId = sessionStorage.getItem('myBookingId');
                             const isMyBooking = myBookingId && booking._id && myBookingId === String(booking._id);
                             if(matches || isMyBooking){
@@ -2346,10 +2315,8 @@
                             userVisibleOnly: true,
                             applicationServerKey: urlBase64ToUint8Array(publicKey)
                         });
-                        // send subscription to server with user email if available
-                        let email = '';
-                        try{ const user = JSON.parse(localStorage.getItem('authUser') || 'null'); if(user && user.email) email = user.email; }catch(e){}
-                        await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ subscription: sub, email: email, role: 'user' }) });
+                        // send subscription to server
+                        await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ subscription: sub, role: 'user' }) });
                         console.log('[push:user] subscribed');
                     }catch(e){ console.warn('[push:user] subscribe failed', e); }
                 }

@@ -973,10 +973,6 @@
                     <div class="detail-value">${request.name}</div>
                 </div>
                 <div class="detail-group">
-                    <div class="detail-label">Email</div>
-                    <div class="detail-value">${request.email || 'Not provided'}</div>
-                </div>
-                <div class="detail-group">
                     <div class="detail-label">Phone</div>
                     <div class="detail-value">${request.whatsapp || 'Not provided'}</div>
                 </div>
@@ -1145,8 +1141,8 @@
 
                     <form class="auth-form" id="loginForm" data-form="login">
                         <div class="form-group">
-                            <label for="loginEmail">Email or Phone</label>
-                            <input id="loginEmail" name="identifier" type="text" placeholder="you@example.com or 2567xxxxxxx" required>
+                            <label for="loginEmail">Phone or Admin ID</label>
+                            <input id="loginEmail" name="identifier" type="text" placeholder="2567xxxxxxx or admin" required>
                         </div>
                         <div class="form-group">
                             <label for="loginPassword">Password</label>
@@ -1166,10 +1162,6 @@
                         <div class="form-group">
                             <label for="regPhone">Phone</label>
                             <input id="regPhone" name="phone" type="text" placeholder="2567xxxxxxx" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="regEmail">Email</label>
-                            <input id="regEmail" name="email" type="email" placeholder="you@example.com">
                         </div>
                         <div class="form-group">
                             <label for="regPassword">Password</label>
@@ -1292,12 +1284,11 @@
 
                     const name = document.getElementById('regName').value.trim();
                     const phone = document.getElementById('regPhone').value.trim();
-                    const email = document.getElementById('regEmail').value.trim();
                     const password = document.getElementById('regPassword').value;
 
                     if(!name || !phone || !password){ showError('Name, phone and password are required'); submitBtn.textContent = origText; submitBtn.disabled = false; return; }
 
-                    const res = await postJSON('/api/auth/register', { name, phone, email, password });
+                    const res = await postJSON('/api/auth/register', { name, phone, password });
                     if(res.ok && res.json){
                         if(res.json.token){
                             localStorage.setItem('authToken', res.json.token);

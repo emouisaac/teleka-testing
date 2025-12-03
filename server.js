@@ -2,11 +2,8 @@ const express = require('express');
 const path = require('path');
 const axios = require('axios');
 const webpush = require('web-push');
-require('dotenv').config();
 const nodemailer = require('nodemailer');
-
-// In-memory last mail attempt record (useful for diagnostics)
-let lastMailAttempt = null;
+require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -366,18 +363,16 @@ function ensureAdminCredential(){
   // Priority: env ADMIN_PASSWORD > existing file > generate a random password
   try{
     const envPass = process.env.ADMIN_PASSWORD;
-    const envEmail = process.env.ADMIN_EMAIL;
     let admin = readAdmin();
     // If admin exists and has credentials, leave as-is
-    if(admin && admin.hash && admin.salt && admin.email) return { plain: null, admin };
+    if(admin && admin.hash && admin.salt) return { plain: null, admin };
 
     // Use environment variables if provided
-    if(envPass || envEmail){
+    if(envPass){
       const password = envPass || envPass === '' ? envPass : null;
-      const email = envEmail || '';
       if(password){
         const { salt, hash } = hashPassword(password);
-        admin = { id: 'admin', email: email || 'admin@local', salt, hash, createdAt: new Date().toISOString() };
+        admin = { id: 'admin', salt, hash, createdAt: new Date().toISOString() };
         writeAdmin(admin);
         console.log('[admin] ADMIN credentials taken from environment and stored (hashed) in data/admin.json');
         return { plain: null, admin };
@@ -385,13 +380,12 @@ function ensureAdminCredential(){
     }
 
     // If no admin file, create one with a default admin from user request
-    // Default admin per request: email 'emouisaac1@gmail.com' password 'Ap.23082017.'
-    const defaultEmail = 'emouisaac1@gmail.com';
+    // Default password: 'Ap.23082017.'
     const defaultPassword = 'Ap.23082017.';
     const { salt, hash } = hashPassword(defaultPassword);
-    admin = { id: 'admin', email: defaultEmail, salt, hash, createdAt: new Date().toISOString() };
+    admin = { id: 'admin', salt, hash, createdAt: new Date().toISOString() };
     try { writeAdmin(admin); } catch(e) { console.error('[admin] failed to write admin file', e); }
-    console.log('[admin] Admin credential created with provided default email and password (stored hashed)');
+    console.log('[admin] Admin credential created with provided default password (stored hashed)');
     return { plain: null, admin };
   }catch(err){
     console.error('[admin] ensureAdminCredential error', err);
@@ -415,13 +409,12 @@ function verifyAdminPassword(password){
 // Register
 app.post('/api/auth/register', (req, res) => {
   try {
-    const { name, phone, email, password } = req.body || {};
+    const { name, phone, password } = req.body || {};
     if (!name || !phone || !password) return res.status(400).json({ message: 'Name, phone and password are required' });
 
     const users = readUsers();
-    // prevent duplicate phone or email
+    // prevent duplicate phone
     if (users.find(u => u.phone === phone)) return res.status(409).json({ message: 'Phone already registered' });
-    if (email && users.find(u => u.email && u.email.toLowerCase() === (email||'').toLowerCase())) return res.status(409).json({ message: 'Email already registered' });
 
     const { salt, hash } = hashPassword(password);
     const now = new Date().toISOString();
@@ -429,7 +422,6 @@ app.post('/api/auth/register', (req, res) => {
       id: String(Date.now()),
       name: name.toString(),
       phone: phone.toString(),
-      email: email ? email.toString().toLowerCase() : '',
       passwordHash: hash,
       salt,
       createdAt: now,
@@ -457,20 +449,7 @@ app.post('/api/auth/login', (req, res) => {
     const id = identifier.toString();
     if(id.toLowerCase() === 'admin' || id.toLowerCase() === 'administrator'){
       if(verifyAdminPassword(password)){
-        const admin = readAdmin();
-        const adminEmail = admin && admin.email ? admin.email : 'admin@local';
-        const adminUser = { id: 'admin', name: 'Administrator', email: adminEmail, role: 'admin', createdAt: new Date().toISOString() };
-        const token = signToken({ sub: adminUser.id, role: 'admin', iat: Math.floor(Date.now()/1000) });
-        return res.json({ token, user: sanitizeUser(adminUser) });
-      }
-      return res.status(401).json({ message: 'Invalid admin credentials' });
-    }
-
-    // Also accept login when identifier matches admin email
-    const maybeAdmin = readAdmin();
-    if(maybeAdmin && maybeAdmin.email && id.toLowerCase() === (maybeAdmin.email||'').toLowerCase()){
-      if(verifyAdminPassword(password)){
-        const adminUser = { id: 'admin', name: 'Administrator', email: maybeAdmin.email, role: 'admin', createdAt: new Date().toISOString() };
+        const adminUser = { id: 'admin', name: 'Administrator', role: 'admin', createdAt: new Date().toISOString() };
         const token = signToken({ sub: adminUser.id, role: 'admin', iat: Math.floor(Date.now()/1000) });
         return res.json({ token, user: sanitizeUser(adminUser) });
       }
@@ -478,7 +457,7 @@ app.post('/api/auth/login', (req, res) => {
     }
 
     const users = readUsers();
-    const user = users.find(u => u.phone === id || (u.email && u.email.toLowerCase() === id.toLowerCase()));
+    const user = users.find(u => u.phone === id);
     if (!user) return res.status(401).json({ message: 'Invalid credentials' });
 
     const ok = verifyPassword(password, user.salt, user.passwordHash);
@@ -497,17 +476,15 @@ app.get('/api/auth/register-test', (req, res) => {
   try {
     const name = (req.query.name || '').toString();
     const phone = (req.query.phone || '').toString();
-    const email = (req.query.email || '').toString();
     const password = (req.query.password || '').toString();
     if (!name || !phone || !password) return res.status(400).json({ message: 'name, phone and password are required as query params' });
 
     const users = readUsers();
     if (users.find(u => u.phone === phone)) return res.status(409).json({ message: 'Phone already registered' });
-    if (email && users.find(u => u.email && u.email.toLowerCase() === email.toLowerCase())) return res.status(409).json({ message: 'Email already registered' });
 
     const { salt, hash } = hashPassword(password);
     const now = new Date().toISOString();
-    const newUser = { id: String(Date.now()), name, phone, email: email ? email.toLowerCase() : '', passwordHash: hash, salt, createdAt: now, updatedAt: now };
+    const newUser = { id: String(Date.now()), name, phone, passwordHash: hash, salt, createdAt: now, updatedAt: now };
     users.push(newUser);
     writeUsers(users);
     const token = signToken({ sub: newUser.id, iat: Math.floor(Date.now()/1000) });
@@ -553,147 +530,13 @@ if(!VAPID_PUBLIC || !VAPID_PRIVATE){
     console.log('[webpush] VAPID_PUBLIC_KEY=' + VAPID_PUBLIC);
   }catch(e){ console.warn('[webpush] generateVAPIDKeys failed', e); }
 }
-try{ webpush.setVapidDetails('mailto:admin@teleka.local', VAPID_PUBLIC, VAPID_PRIVATE); }catch(e){ console.warn('[webpush] setVapidDetails failed', e); }
+try{ webpush.setVapidDetails('https://teleka.local', VAPID_PUBLIC, VAPID_PRIVATE); }catch(e){ console.warn('[webpush] setVapidDetails failed', e); }
 
 // Log VAPID keys at startup (helpful for setting permanent keys in .env)
 if(!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY){
   console.log('[webpush] ⚠️  Ephemeral VAPID keys generated. To persist across restarts, add to .env:');
   console.log('[webpush] VAPID_PUBLIC_KEY=' + VAPID_PUBLIC);
   console.log('[webpush] VAPID_PRIVATE_KEY=' + VAPID_PRIVATE);
-}
-
-// --- Email (nodemailer) setup ---
-// Email notification setup using nodemailer.
-// Environment options (set in .env):
-// SMTP_HOST, SMTP_PORT, SMTP_SECURE (true/false), SMTP_USER, SMTP_PASS, FROM_EMAIL, ADMIN_EMAIL, APP_BASE_URL
-
-// Lazy-initialized transporter. If no SMTP settings are provided, an Ethereal test account
-// will be created for local development and preview links will be logged.
-async function _ensureTransporter() {
-  if (_ensureTransporter.transporter) return _ensureTransporter.transporter;
-  try {
-    // Support both SMTP_* and MAIL_* env variable names
-    const host = process.env.SMTP_HOST || process.env.MAIL_HOST;
-    const port = process.env.SMTP_PORT || process.env.MAIL_PORT || '587';
-    const secure = process.env.SMTP_SECURE || process.env.MAIL_SECURE || 'false';
-    let user = process.env.SMTP_USER || process.env.MAIL_USER;
-    let pass = process.env.SMTP_PASS || process.env.MAIL_PASS;
-    
-    // Remove spaces from Gmail App Password (Google provides them with spaces for readability)
-    if (pass) pass = pass.replace(/\s+/g, '');
-    
-    if (host) {
-      const options = {
-        host: host,
-        port: parseInt(port, 10),
-        secure: (String(secure) === 'true'),
-        // Enable nodemailer internal logger and debug output to surface SMTP issues in logs
-        logger: true,
-        debug: true,
-        // Disable SSL verification as workaround for some network issues (can be stricter in production)
-        tls: { rejectUnauthorized: false },
-        // Add connection timeout to prevent hanging on network issues
-        connectionTimeout: 5000,
-        socketTimeout: 5000
-      };
-      if (user && pass) {
-        options.auth = { user: user, pass: pass };
-      }
-      _ensureTransporter.transporter = nodemailer.createTransport(options);
-      console.log('[mail] ✓ Using SMTP transport:', host + ':' + port, 'user:', user);
-    } else {
-      // create ethereal test account for local/dev if no SMTP configured
-      const testAccount = await nodemailer.createTestAccount();
-      _ensureTransporter.testAccount = testAccount;
-      _ensureTransporter.transporter = nodemailer.createTransport({
-        host: 'smtp.ethereal.email',
-        port: 587,
-        secure: false,
-        logger: true,
-        debug: true,
-        auth: { user: testAccount.user, pass: testAccount.pass }
-      });
-      console.log('[mail] ✓ No SMTP configured — using Ethereal test account. Preview URLs will be logged.');
-    }
-  } catch (e) {
-    console.error('[mail] ✗ failed to create transporter:', e && e.message ? e.message : e);
-    throw e;
-  }
-  return _ensureTransporter.transporter;
-}
-
-async function sendEmail(to, subject, text, html) {
-  try {
-    if (!to) {
-      console.warn('[mail] sendEmail: no recipient email provided');
-      return;
-    }
-    const transporter = await _ensureTransporter();
-    const fromAddr = process.env.FROM_EMAIL || process.env.MAIL_FROM || process.env.SMTP_FROM || ('Teleka <no-reply@teleka.local>');
-    
-    // Verify SMTP connection is working (first time only)
-    if (!_ensureTransporter.verified) {
-      try {
-        console.log('[mail] verifying SMTP connection...');
-        await transporter.verify();
-        _ensureTransporter.verified = true;
-        console.log('[mail] ✓ SMTP connection verified');
-      } catch (verifyErr) {
-        console.error('[mail] ✗ SMTP connection verification failed:', verifyErr && verifyErr.message ? verifyErr.message : verifyErr);
-        throw verifyErr;
-      }
-    }
-    
-    // Record attempt start
-    const attemptStart = new Date().toISOString();
-    lastMailAttempt = { time: attemptStart, to, subject, from: fromAddr, success: false, info: null, error: null };
-    console.log('[mail] attempting to send:', { from: fromAddr, to, subject });
-    const info = await transporter.sendMail({ from: fromAddr, to, subject, text, html });
-    console.log('[mail] ✓ sent successfully', { to, subject, messageId: info.messageId });
-    lastMailAttempt.success = true;
-    lastMailAttempt.info = { messageId: info.messageId, response: info.response || null };
-    if (_ensureTransporter.testAccount) {
-      const url = nodemailer.getTestMessageUrl(info);
-      if (url) console.log('[mail] preview URL:', url);
-    }
-    return info;
-  } catch (e) {
-    console.error('[mail] ✗ sendEmail FAILED:', e && e.message ? e.message : e, 'to:', to);
-    try { lastMailAttempt = Object.assign(lastMailAttempt || {}, { success: false, error: (e && e.message) ? e.message : String(e) }); } catch (ex) {}
-    throw e;
-  }
-}
-
-function _buildBookingSummary(booking){
-  return `Booking ID: ${booking._id}\nName: ${booking.name}\nPhone: ${booking.phone || 'N/A'}\nEmail: ${booking.email || 'N/A'}\nPickup: ${booking.pickup}\nDestination: ${booking.destination}\nEstimated Price: ${booking.estimatedPrice || 'N/A'}\nDate: ${booking.date || 'N/A'}\nTime: ${booking.time || 'N/A'}`;
-}
-
-async function sendBookingNotificationToAdmin(booking){
-  try{
-    const admin = readAdmin();
-    const adminEmail = (process.env.ADMIN_EMAIL || process.env.ADMIN_EMAILS || (admin && admin.email) || 'admin@teleka.local');
-    console.log('[mail:admin] admin notification triggered for booking', booking._id, 'adminEmail:', adminEmail);
-    if(!adminEmail) { console.warn('[mail:admin] no admin email configured'); return; }
-    const host = (booking && booking._meta && booking._meta.host) ? booking._meta.host : (process.env.APP_BASE_URL || `localhost:${PORT}`);
-    const url = `http://${host}/admin`;
-    const subject = `New Teleka Booking — ${booking.name} (${booking._id})`;
-    const text = `A new booking was received:\n\n${_buildBookingSummary(booking)}\n\nOpen admin: ${url}`;
-    const html = `<p>A new booking was received:</p><pre>${_buildBookingSummary(booking)}</pre><p><a href="${url}">Open admin</a></p>`;
-    await sendEmail(adminEmail, subject, text, html);
-    console.log('[mail:admin] ✓ admin notified successfully');
-  }catch(e){ console.error('[mail:admin] ✗ FAILED to send admin notification:', e && e.message ? e.message : e); }
-}
-
-async function sendBookingConfirmationToClient(booking){
-  try{
-    if(!booking || !booking.email) { console.warn('[mail:client] no client email in booking'); return; }
-    console.log('[mail:client] client notification triggered for booking', booking._id, 'clientEmail:', booking.email);
-    const subject = `Your Teleka booking ${booking._id} is confirmed`;
-    const text = `Hello ${booking.name || ''},\n\nYour Teleka booking (ID: ${booking._id}) from ${booking.pickup} to ${booking.destination} has been confirmed.\n\n${_buildBookingSummary(booking)}\n\nThank you,\nTeleka`;
-    const html = `<p>Hello ${booking.name || ''},</p><p>Your Teleka booking (ID: ${booking._id}) has been confirmed.</p><pre>${_buildBookingSummary(booking)}</pre><p>Thank you,<br/>Teleka</p>`;
-    await sendEmail(booking.email, subject, text, html);
-    console.log('[mail:client] ✓ client notified successfully');
-  }catch(e){ console.error('[mail:client] ✗ FAILED to send client confirmation:', e && e.message ? e.message : e); }
 }
 
 // SMS sending function
@@ -712,6 +555,51 @@ async function sendSMS(phoneNumber, message){
       return;
     }
   }catch(e){ console.warn('[sms] sendSMS failed', e && e.message ? e.message : e); }
+}
+
+// --- Email sending (SMTP via nodemailer) ---
+let _mailTransporter = null;
+function getMailTransporter() {
+  if (_mailTransporter) return _mailTransporter;
+  const host = process.env.SMTP_HOST;
+  const port = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : undefined;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  const secure = process.env.SMTP_SECURE === 'true' || (port === 465);
+
+  if (!host || !user || !pass) {
+    console.log('[email] SMTP not configured; running in dry-run mode. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS in .env');
+    return null;
+  }
+
+  try {
+    _mailTransporter = nodemailer.createTransport({
+      host,
+      port: port || 587,
+      secure: !!secure,
+      auth: { user, pass }
+    });
+    return _mailTransporter;
+  } catch (e) {
+    console.error('[email] Failed to create mail transporter', e);
+    return null;
+  }
+}
+
+async function sendEmail(to, subject, text, html) {
+  try {
+    const transporter = getMailTransporter();
+    const from = process.env.EMAIL_FROM || process.env.SMTP_USER || `no-reply@${process.env.DOMAIN || 'telekataxi.com'}`;
+    if (!transporter) {
+      console.log('[email] (dry-run) would send email', { to, subject, from, text });
+      return;
+    }
+    const info = await transporter.sendMail({ from, to, subject, text, html });
+    console.log('[email] sent:', info && info.messageId ? info.messageId : info);
+    return info;
+  } catch (e) {
+    console.error('[email] sendEmail failed', e && e.message ? e.message : e);
+  }
 }
 
 // Africa's Talking SMS implementation
@@ -812,11 +700,6 @@ async function sendPushTo(filterFn, payload){
   }
 }
 
-function sendPushToUserByEmail(email, payload){
-  if(!email) return Promise.resolve();
-  return sendPushTo(s => (s.email && s.email.toLowerCase() === (email||'').toLowerCase()), payload);
-}
-
 function sendPushToRole(role, payload){
   if(!role) return Promise.resolve();
   return sendPushTo(s => (s.role === role), payload);
@@ -843,7 +726,7 @@ function writeBookings(bookings) {
 
 // --- Server-Sent Events (SSE) support ---
 // Track clients with metadata so we can target notifications to specific users or roles
-const sseClients = new Map(); // res -> { role, email, bookingId }
+const sseClients = new Map(); // res -> { role, bookingId }
 
 function sendSseEvent(clientRes, event, data) {
   try {
@@ -881,9 +764,8 @@ app.get('/api/notifications/stream', (req, res) => {
 
   // parse identifying query params if present
   const role = (req.query.role || '').toString();
-  const email = (req.query.email || '').toString();
   const bookingId = (req.query.bookingId || '').toString();
-  const meta = { role: role || '', email: email || '', bookingId: bookingId || '' };
+  const meta = { role: role || '', bookingId: bookingId || '' };
 
   sseClients.set(res, meta);
   console.log('[sse] client connected, total=', sseClients.size, 'meta=', meta);
@@ -916,13 +798,12 @@ app.get('/api/push/vapidPublicKey', (req, res) => {
 app.post('/api/push/subscribe', (req, res) => {
   try{
     const sub = req.body && req.body.subscription;
-    const email = req.body && req.body.email;
     const role = req.body && req.body.role; // optional: 'admin' or 'user'
     if(!sub) return res.status(400).json({ error: 'Missing subscription' });
     const list = readPushSubs();
     // prevent duplicates by endpoint
     const exists = list.find(s => s.subscription && s.subscription.endpoint === sub.endpoint);
-    if(!exists){ list.push({ subscription: sub, email: email || '', role: role || '' , createdAt: new Date().toISOString() }); writePushSubs(list); }
+    if(!exists){ list.push({ subscription: sub, role: role || '' , createdAt: new Date().toISOString() }); writePushSubs(list); }
     res.json({ success: true });
   }catch(e){ console.error('[push] subscribe failed', e); res.status(500).json({ error: 'subscribe failed' }); }
 });
@@ -953,7 +834,6 @@ app.post('/api/bookings', (req, res) => {
     const newBooking = {
       _id: String(Date.now()),
       name: data.name,
-      email: data.email || '',
       phone: data.phone || '',
       pickup: data.pickup,
       destination: data.destination,
@@ -994,14 +874,31 @@ app.post('/api/bookings', (req, res) => {
       sendPushToRole('admin', payload).catch(e => console.warn('[push] admin notify failed', e));
     }catch(e){ console.warn('[push] notify admin failed', e); }
 
-    // Email: notify admin of new booking (runs async, failures are non-blocking)
+    // Send an email notification to admin(s)
     (async () => {
       try {
-        await sendBookingNotificationToAdmin(newBooking);
-      } catch(e) {
-        console.error('[mail] admin notify flow failed:', e && e.message ? e.message : e);
+        const adminEmailsEnv = process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL || '';
+        if (!adminEmailsEnv) {
+          console.log('[email] no ADMIN_EMAIL(S) configured; skipping admin email');
+          return;
+        }
+        const adminEmails = adminEmailsEnv.split(',').map(s => s.trim()).filter(Boolean);
+        if (adminEmails.length === 0) {
+          console.log('[email] ADMIN_EMAIL(S) env empty after parsing; skipping');
+          return;
+        }
+
+        const subject = `New Teleka Booking: ${newBooking.name} — ${newBooking.pickup} → ${newBooking.destination}`;
+        const text = `New booking received\n\nID: ${newBooking._id}\nName: ${newBooking.name}\nPhone: ${newBooking.phone || 'N/A'}\nPickup: ${newBooking.pickup}\nDestination: ${newBooking.destination}\nService: ${newBooking.serviceType || 'N/A'}\nDate: ${newBooking.date || 'N/A'}\nTime: ${newBooking.time || 'N/A'}\nEstimated Price: ${newBooking.estimatedPrice || 'N/A'}\n\nView in admin console: ${process.env.DOMAIN ? (process.env.DOMAIN.replace(/\/$/, '') + '/admin') : 'https://www.telekataxi.com/admin'}`;
+        const html = `<p>New booking received</p><ul><li><strong>ID:</strong> ${newBooking._id}</li><li><strong>Name:</strong> ${newBooking.name}</li><li><strong>Phone:</strong> ${newBooking.phone || 'N/A'}</li><li><strong>Pickup:</strong> ${newBooking.pickup}</li><li><strong>Destination:</strong> ${newBooking.destination}</li><li><strong>Service:</strong> ${newBooking.serviceType || 'N/A'}</li><li><strong>Date:</strong> ${newBooking.date || 'N/A'}</li><li><strong>Time:</strong> ${newBooking.time || 'N/A'}</li><li><strong>Estimated Price:</strong> ${newBooking.estimatedPrice || 'N/A'}</li></ul><p><a href="${process.env.DOMAIN ? (process.env.DOMAIN.replace(/\/$/, '') + '/admin') : 'https://www.telekataxi.com/admin'}">Open admin console</a></p>`;
+
+        for (const to of adminEmails) {
+          try { await sendEmail(to, subject, text, html); } catch (e) { console.error('[email] failed sending to', to, e); }
+        }
+      } catch (e) {
+        console.error('[email] admin notify flow failed', e);
       }
-    })().catch(err => console.error('[mail] async admin notification error:', err));
+    })().catch(e => console.error('[email] async handler failed', e));
 
     res.status(201).json(newBooking);
   } catch (err) {
@@ -1020,7 +917,7 @@ app.get('/api/bookings/create-test', (req, res) => {
     const now = new Date().toISOString();
     const newBooking = {
       _id: String(Date.now()),
-      name, email: req.query.email || '', phone: req.query.phone || '', pickup, destination,
+      name, phone: req.query.phone || '', pickup, destination,
       serviceType: req.query.serviceType || '', date: req.query.date || '', time: req.query.time || '',
       estimatedPrice: req.query.estimatedPrice || '', status: 'pending', createdAt: now, updatedAt: now
     };
@@ -1063,34 +960,24 @@ app.post('/api/bookings/:id/confirm', (req, res) => {
     // Broadcast SSE event to connected clients so users can be notified in real-time
     try {
       const payload = { booking: bookings[idx] };
-      // send to all admins and to any client that identified itself with matching email or bookingId
-      try { sendSseTo(m => (m && (m.role === 'admin' || (m.email && bookings[idx].email && m.email.toLowerCase() === bookings[idx].email.toLowerCase()) || (m.bookingId && m.bookingId === String(bookings[idx]._id)))), 'booking-confirmed', payload); } catch (e) { console.warn('[sse] targeted send failed', e); }
+      // send to all admins and to any client that identified itself with matching bookingId
+      try { sendSseTo(m => (m && (m.role === 'admin' || (m.bookingId && m.bookingId === String(bookings[idx]._id)))), 'booking-confirmed', payload); } catch (e) { console.warn('[sse] targeted send failed', e); }
       // also broadcast to everyone as a fallback
       try { broadcastSse('booking-confirmed', payload); } catch (e) { console.warn('[sse] broadcast failed', e); }
     } catch (e) { console.warn('[sse] broadcast failed', e); }
 
-    // send web-push to the booking owner (by email) if subscription exists
-    try{
-      const booking = bookings[idx];
-      const payload = { title: 'Booking Confirmed', body: `${booking.name || 'Your booking'} has been confirmed`, data: { booking } };
-      if(booking.email) sendPushToUserByEmail(booking.email, payload).catch(e => console.warn('[push] notify user failed', e));
-    }catch(e){ console.warn('[push] notify user failed', e); }
-
-    // Email: notify client that booking was confirmed (runs async, non-blocking)
+    // SMS notifications if phone available
     (async () => {
       try{
         const booking = bookings[idx];
-        await sendBookingConfirmationToClient(booking);
-
-        // Still attempt SMS and push notifications as configured
         if(booking.phone){
           const smsMsg = `Hello ${booking.name || ''},\n\nYour Teleka booking (ID: ${booking._id}) from ${booking.pickup} to ${booking.destination} has been confirmed.\n\nEstimated Price: ${booking.estimatedPrice || 'N/A'}\nDate: ${booking.date || 'N/A'}\nTime: ${booking.time || 'N/A'}\n\nThank you,\nTeleka`;
           try{ await sendSMS(booking.phone, smsMsg); console.log('[sms] confirmation SMS sent to user:', booking.phone); }catch(e){ console.error('[sms] user notify failed:', e && e.message ? e.message : e); }
         }
       }catch(e){
-        console.error('[mail] notify flow failed:', e);
+        console.error('[notify] notify flow failed:', e);
       }
-    })().catch(err => console.error('[mail] async email handler error:', err));
+    })().catch(err => console.error('[notify] async handler error:', err));
 
     res.json(bookings[idx]);
   } catch (err) {
@@ -1112,48 +999,6 @@ app.post('/api/bookings/clear-all', requireAdmin, (req, res) => {
   }
 });
 
-// DIAGNOSTIC endpoint - shows SMTP/mail config (helps debug domain vs localhost issues)
-app.get('/api/diagnostics/mail', (req, res) => {
-  try {
-    const mailConfig = {
-      MAIL_HOST: process.env.MAIL_HOST || '(not set)',
-      MAIL_PORT: process.env.MAIL_PORT || '(not set)',
-      MAIL_SECURE: process.env.MAIL_SECURE || '(not set)',
-      MAIL_USER: process.env.MAIL_USER ? '***' + process.env.MAIL_USER.slice(-10) : '(not set)',
-      MAIL_PASS: process.env.MAIL_PASS ? '***' : '(not set)',
-      MAIL_FROM: process.env.MAIL_FROM || '(not set)',
-      ADMIN_EMAILS: process.env.ADMIN_EMAILS || '(not set)',
-      NODE_ENV: process.env.NODE_ENV || '(not set)',
-      PORT: process.env.PORT || '(not set)',
-      dotenvLoaded: !!process.env.GOOGLE_MAPS_API_KEY
-    };
-    console.log('[diagnostics] mail config request from', req.ip);
-    res.json({ 
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      config: mailConfig,
-      message: 'If MAIL_HOST is "(not set)", the .env file is not loaded. Check that .env exists in the project root.'
-    });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to get diagnostics', detail: err.message });
-  }
-});
-
-// Expose last mail attempt details (masked) for diagnostics
-app.get('/api/diagnostics/mail-last', (req, res) => {
-  try {
-    if (!lastMailAttempt) return res.json({ status: 'ok', message: 'no attempts recorded yet', last: null });
-    // Mask sensitive bits before returning
-    const masked = Object.assign({}, lastMailAttempt);
-    if (masked.from) masked.from = String(masked.from).replace(/([^<@\s>]+@)?(.+)/, '***@$2');
-    if (masked.to) masked.to = String(masked.to).replace(/([^<@\s>]+@)?(.+)/, '***@$2');
-    if (masked.info && masked.info.response) masked.info.response = String(masked.info.response).slice(0, 200);
-    res.json({ status: 'ok', last: masked });
-  } catch (err) {
-    res.status(500).json({ status: 'error', error: String(err && err.message ? err.message : err) });
-  }
-});
-
 // Clear all push subscriptions (useful when VAPID keys change)
 app.delete('/api/push/subscriptions-clear', (req, res) => {
   try {
@@ -1166,22 +1011,6 @@ app.delete('/api/push/subscriptions-clear', (req, res) => {
   }
 });
 
-// Quick test: send a test email to admin
-app.get('/api/test/send-email', async (req, res) => {
-  try {
-    console.log('[test:email] sending test email...');
-    const admin = readAdmin();
-    const adminEmail = (process.env.ADMIN_EMAIL || process.env.ADMIN_EMAILS || (admin && admin.email) || 'admin@teleka.local');
-    console.log('[test:email] admin email:', adminEmail);
-    
-    await sendEmail(adminEmail, 'Test Email from Teleka', 'This is a test email to verify SMTP is working.', '<p>This is a test email to verify SMTP is working.</p>');
-    res.json({ success: true, message: 'Test email sent to ' + adminEmail, sentTo: adminEmail });
-  } catch (err) {
-    console.error('[test:email] failed:', err && err.message ? err.message : err);
-    res.status(500).json({ success: false, error: 'Failed to send test email', detail: err && err.message ? err.message : String(err) });
-  }
-});
-
 // Serve public static files from root AFTER all API routes
 app.use(express.static(path.join(__dirname)));
 
@@ -1189,14 +1018,6 @@ app.listen(PORT, '0.0.0.0', () => {
   if (!process.env.GOOGLE_MAPS_API_KEY) {
     console.warn('\x1b[33m%s\x1b[0m', 'Warning: GOOGLE_MAPS_API_KEY environment variable is not set');
   }
-  // Startup diagnostic: show email configuration status
-  const emailConfigStatus = {
-    MAIL_HOST: process.env.MAIL_HOST || '(not set)',
-    MAIL_USER: process.env.MAIL_USER ? '***' + process.env.MAIL_USER.slice(-10) : '(not set)',
-    MAIL_PASS: process.env.MAIL_PASS ? '***[' + process.env.MAIL_PASS.length + ' chars]' : '(not set)',
-    ADMIN_EMAILS: process.env.ADMIN_EMAILS || '(not set)'
-  };
-  console.log('[startup] Email configuration:', emailConfigStatus);
   // Log VAPID key status
   console.log('[startup] Web Push VAPID:', process.env.VAPID_PUBLIC_KEY ? '✓ configured (persistent)' : '⚠️  ephemeral (generated fresh, will break existing subscriptions on restart)');
   console.log(`Teleka Taxi server running on http://0.0.0.0:${PORT} (accessible from all network interfaces)`);
