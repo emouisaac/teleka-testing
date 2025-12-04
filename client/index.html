@@ -1036,6 +1036,9 @@
         .auth-tab.active { background:var(--primary); color:#fff; }
         .auth-form { display:block; }
         .auth-form .form-group { margin-bottom:12px; }
+        .auth-body .form-group { position: relative; }
+        .password-toggle { position: absolute; right: 10px; top: 38px; background: none; border: none; font-size: 1rem; cursor: pointer; color: var(--text-light); padding: 4px; }
+        .auth-body .form-group input { padding-right: 44px; }
         .auth-form label { display:block; font-size:0.85rem; margin-bottom:6px; color:var(--text-light); }
         .auth-form input { width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:transparent; color:inherit; }
         .auth-actions { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:12px; }
@@ -2253,10 +2256,34 @@
                         <div class="form-group">
                             <label for="loginPassword">Password</label>
                             <input id="loginPassword" name="password" type="password" placeholder="••••••••" required>
+                            <button type="button" class="password-toggle" data-target="loginPassword" aria-label="Show password"><i class="fas fa-eye"></i></button>
                         </div>
                         <div class="auth-actions">
                             <button class="btn" type="submit">Sign In</button>
                             <a href="#" class="auth-aux" id="forgotLink">Forgot?</a>
+                        </div>
+                    </form>
+                    <form class="auth-form" id="profileForm" data-form="profile" style="display:none;">
+                        <div class="form-group">
+                            <label>Full name</label>
+                            <input id="pfName" type="text" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label>Phone</label>
+                            <input id="pfPhone" type="text" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input id="pfEmail" type="email" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label>Password</label>
+                            <input id="pfPassword" type="password" value="********" readonly>
+                            <button type="button" class="password-toggle" data-target="pfPassword" aria-label="Show password"><i class="fas fa-eye"></i></button>
+                        </div>
+                        <div class="auth-actions">
+                            <button class="btn btn-danger" type="button" id="pfLogout">Logout</button>
+                            <button class="btn btn-secondary" type="button" id="pfClose">Close</button>
                         </div>
                     </form>
 
@@ -2276,6 +2303,7 @@
                         <div class="form-group">
                             <label for="regPassword">Password</label>
                             <input id="regPassword" name="password" type="password" placeholder="Create a password" required>
+                            <button type="button" class="password-toggle" data-target="regPassword" aria-label="Show password"><i class="fas fa-eye"></i></button>
                         </div>
                         <div class="auth-actions">
                             <button class="btn" type="submit">Create Account</button>
@@ -2328,10 +2356,26 @@
                         if(target === name){ t.classList.add('active'); }
                         else { t.classList.remove('active'); }
                     });
+                    // support login, register, and profile views
+                    const profileForm = document.getElementById('profileForm');
+                    const titleEl = document.getElementById('authTitle');
+                    const tabsContainer = document.querySelector('.auth-tabs');
                     if(name === 'login'){
-                        loginForm.style.display = 'block'; registerForm.style.display = 'none';
+                        if(titleEl) titleEl.textContent = 'Welcome';
+                        if(tabsContainer) tabsContainer.style.display = '';
+                        loginForm.style.display = 'block'; registerForm.style.display = 'none'; if(profileForm) profileForm.style.display = 'none';
+                    } else if(name === 'register'){
+                        if(titleEl) titleEl.textContent = 'Welcome';
+                        if(tabsContainer) tabsContainer.style.display = '';
+                        loginForm.style.display = 'none'; registerForm.style.display = 'block'; if(profileForm) profileForm.style.display = 'none';
+                    } else if(name === 'profile'){
+                        if(titleEl) titleEl.textContent = 'Welcome to your profile';
+                        if(tabsContainer) tabsContainer.style.display = 'none';
+                        loginForm.style.display = 'none'; registerForm.style.display = 'none'; if(profileForm) profileForm.style.display = 'block'; populateProfile();
                     } else {
-                        loginForm.style.display = 'none'; registerForm.style.display = 'block';
+                        if(titleEl) titleEl.textContent = 'Welcome';
+                        if(tabsContainer) tabsContainer.style.display = '';
+                        loginForm.style.display = 'none'; registerForm.style.display = 'block'; if(profileForm) profileForm.style.display = 'none';
                     }
                     clearError();
                 }
@@ -2374,7 +2418,7 @@
                     }
                 }
 
-                // click handler: if not authenticated, open login modal; if authenticated, show a small menu (logout)
+                // click handler: if not authenticated, open login modal; if authenticated, open profile modal
                 openBtn?.addEventListener('click', function(e){
                     e.preventDefault();
                     try{
@@ -2383,16 +2427,35 @@
                             showModal('login');
                             return;
                         }
-                        // simple prompt-based menu: allow logout or go to profile
-                        const user = JSON.parse(raw);
-                        const choice = window.confirm("Sign out from " + (user.name || user.phone) + "? Click OK to sign out, Cancel to keep signed in.");
-                        if(choice){
-                            localStorage.removeItem('authToken');
-                            localStorage.removeItem('authUser');
-                            location.reload();
-                        }
+                        showModal('profile');
                     }catch(err){
                         showModal('login');
+                    }
+                });
+
+                function populateProfile(){
+                    try{
+                        const raw = localStorage.getItem('authUser');
+                        if(!raw) return;
+                        const u = JSON.parse(raw);
+                        document.getElementById('pfName').value = u.name || '';
+                        document.getElementById('pfPhone').value = u.phone || '';
+                        document.getElementById('pfEmail').value = u.email || '';
+                        // password cannot be retrieved (stored hashed). show placeholder
+                        document.getElementById('pfPassword').value = '********';
+                    }catch(e){/* ignore */}
+                }
+
+                // profile actions
+                document.addEventListener('click', function(e){
+                    if(e.target && e.target.id === 'pfLogout'){
+                        localStorage.removeItem('authToken');
+                        localStorage.removeItem('authUser');
+                        closeModal();
+                        location.reload();
+                    }
+                    if(e.target && e.target.id === 'pfClose'){
+                        closeModal();
                     }
                 });
 
@@ -2483,6 +2546,36 @@
                         submitBtn.disabled = false;
                     }
                 });
+
+                // Password show/hide toggles
+                function initPasswordToggles(){
+                    document.querySelectorAll('.password-toggle').forEach(btn => {
+                        btn.addEventListener('click', function(e){
+                            e.preventDefault();
+                            const targetId = btn.getAttribute('data-target');
+                            const input = document.getElementById(targetId);
+                            if(!input) return;
+
+                            // If this is the profile placeholder (readonly stars), inform user passwords cannot be displayed
+                            if (input.readOnly && /^[\*\u2022\.]+$/.test((input.value||'').trim())) {
+                                alert('For security the password cannot be displayed. Use "Change password" to set a new password.');
+                                return;
+                            }
+
+                            if(input.type === 'password'){
+                                input.type = 'text';
+                                btn.innerHTML = '<i class="fas fa-eye-slash"></i>';
+                                btn.setAttribute('aria-label','Hide password');
+                                try{ input.focus(); input.setSelectionRange(0, input.value.length); }catch(e){}
+                            } else {
+                                input.type = 'password';
+                                btn.innerHTML = '<i class="fas fa-eye"></i>';
+                                btn.setAttribute('aria-label','Show password');
+                            }
+                        });
+                    });
+                }
+                initPasswordToggles();
             })();
         </script>
 
