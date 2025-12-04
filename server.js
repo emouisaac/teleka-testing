@@ -192,18 +192,154 @@ async function sendAdminEmail(booking) {
   const text = `New booking ${booking._id}\nName: ${booking.name}\nPhone: ${booking.phone}\nPickup: ${booking.pickup}\nDestination: ${booking.destination}\nDate/Time: ${booking.date || ''} ${booking.time || ''}\nNotes: ${booking.notes || ''}\nView: ${domain}/admin/`;
 
   try {
-    const info = await transporter.sendMail({
+    // ensure email sending cannot hang indefinitely — 10s timeout
+    const mailPromise = transporter.sendMail({
       from: `${fromLabel} <${process.env.SMTP_USER || 'no-reply@' + (process.env.DOMAIN ? new URL(process.env.DOMAIN).hostname : 'localhost')}>`,
       to: adminEmail,
       subject,
       text,
       html
     });
+
+    const info = await Promise.race([
+      mailPromise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Email send timeout (10s)')), 10000))
+    ]);
+
     console.log('[EMAIL] Admin notification sent:', info && info.messageId ? info.messageId : info);
   } catch (err) {
     console.error('[EMAIL] Failed sending admin notification:', err && err.message ? err.message : err);
+    // Persist to queue so delivery will be retried
+    try {
+      await enqueueEmail({
+        to: adminEmail,
+        from: `${fromLabel} <${process.env.SMTP_USER || 'no-reply@' + (process.env.DOMAIN ? new URL(process.env.DOMAIN).hostname : 'localhost')}>`,
+        subject,
+        text,
+        html,
+        bookingId: booking._id
+      });
+      console.log('[EMAIL] Enqueued admin notification for retry');
+    } catch (qerr) {
+      console.error('[EMAIL] Failed to enqueue email for retry:', qerr && qerr.message ? qerr.message : qerr);
+    }
   }
 }
+
+// ===== Email queue (persistent via MongoDB) =====
+const emailQueueSchema = new mongoose.Schema({
+  to: String,
+  from: String,
+  subject: String,
+  text: String,
+  html: String,
+  attempts: { type: Number, default: 0 },
+  nextAttemptAt: { type: Date, default: Date.now },
+  createdAt: { type: Date, default: Date.now },
+  lastError: String,
+  bookingId: { type: mongoose.Schema.Types.ObjectId, ref: 'Booking', default: null }
+});
+
+const EmailQueue = mongoose.model('EmailQueue', emailQueueSchema);
+
+async function enqueueEmail(payload) {
+  try {
+    const q = new EmailQueue(payload);
+    await q.save();
+    return q;
+  } catch (err) {
+    console.error('[EMAIL-QUEUE] Enqueue failed:', err && err.message ? err.message : err);
+    throw err;
+  }
+}
+
+async function processEmailQueue() {
+  if (mongoose.connection.readyState !== 1) {
+    console.log('[EMAIL-QUEUE] MongoDB not connected; skipping queue processing');
+    return 0;
+  }
+
+  const limit = 10;
+  const now = new Date();
+  const items = await EmailQueue.find({ nextAttemptAt: { $lte: now } }).sort({ createdAt: 1 }).limit(limit);
+  if (!items || items.length === 0) return 0;
+
+  let processed = 0;
+  for (const item of items) {
+    try {
+      const transporter = setupMailTransporter();
+      if (!transporter) {
+        console.log('[EMAIL-QUEUE] No transporter configured; aborting processing');
+        break;
+      }
+
+      const mailPromise = transporter.sendMail({
+        from: item.from,
+        to: item.to,
+        subject: item.subject,
+        text: item.text,
+        html: item.html
+      });
+
+      const info = await Promise.race([
+        mailPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Email send timeout (10s)')), 10000))
+      ]);
+
+      console.log('[EMAIL-QUEUE] Sent queued email:', info && info.messageId ? info.messageId : info);
+      await EmailQueue.deleteOne({ _id: item._id });
+      processed++;
+    } catch (err) {
+      console.error('[EMAIL-QUEUE] Error sending queued email:', err && err.message ? err.message : err);
+      try {
+        item.attempts = (item.attempts || 0) + 1;
+        const backoffMs = Math.min(60 * 1000 * Math.pow(2, item.attempts), 24 * 3600 * 1000);
+        item.nextAttemptAt = new Date(Date.now() + backoffMs);
+        item.lastError = err && err.message ? err.message : String(err);
+        await item.save();
+        console.log('[EMAIL-QUEUE] Rescheduled queued email. Attempts:', item.attempts, 'Next attempt:', item.nextAttemptAt);
+      } catch (uerr) {
+        console.error('[EMAIL-QUEUE] Failed updating queue item:', uerr && uerr.message ? uerr.message : uerr);
+      }
+    }
+  }
+
+  return processed;
+}
+
+// Start periodic queue processor
+setInterval(() => {
+  processEmailQueue().catch(e => console.error('[EMAIL-QUEUE] Processor error:', e && e.message ? e.message : e));
+}, 30 * 1000);
+
+// Admin debug endpoints for email queue
+app.get('/api/debug/email-queue', async (req, res) => {
+  const secret = (req.query.secret || req.headers['x-admin-secret'] || '').toString();
+  const allowed = process.env.MAINTENANCE_SECRET || process.env.ADMIN_PASS;
+  if (!secret || !allowed || secret !== allowed) return res.status(403).json({ error: 'Unauthorized' });
+
+  try {
+    const items = await EmailQueue.find().sort({ createdAt: -1 }).limit(200);
+    res.json(items.map(i => ({ id: i._id, to: i.to, subject: i.subject, attempts: i.attempts, nextAttemptAt: i.nextAttemptAt, createdAt: i.createdAt })));
+  } catch (err) {
+    console.error('[EMAIL-QUEUE] Debug list error:', err && err.message ? err.message : err);
+    res.status(500).json({ error: err && err.message ? err.message : err });
+  }
+});
+
+app.post('/api/debug/process-email-queue', async (req, res) => {
+  const secret = (req.query.secret || req.headers['x-admin-secret'] || '').toString();
+  const allowed = process.env.MAINTENANCE_SECRET || process.env.ADMIN_PASS;
+  if (!secret || !allowed || secret !== allowed) return res.status(403).json({ error: 'Unauthorized' });
+
+  try {
+    const processed = await processEmailQueue();
+    res.json({ success: true, processed });
+  } catch (err) {
+    console.error('[EMAIL-QUEUE] Manual process error:', err && err.message ? err.message : err);
+    res.status(500).json({ error: err && err.message ? err.message : err });
+  }
+});
 
 // Server-Sent Events clients
 const sseClients = [];
@@ -390,8 +526,13 @@ app.post('/api/bookings', async (req, res) => {
     // Broadcast new booking to SSE clients
     try { sendSseEvent('booking_created', saved.toObject()); } catch (e) { /* ignore */ }
 
-    // Notify admin by email (best-effort)
-    try { await sendAdminEmail(saved); } catch (e) { console.error('[BOOKING] Error sending admin email:', e && e.message ? e.message : e); }
+    // Notify admin by email (best-effort) without blocking the HTTP response.
+    // Send asynchronously and log any errors — prevents client hanging on failed SMTP.
+    try {
+      sendAdminEmail(saved).catch(e => console.error('[BOOKING] Error sending admin email:', e && e.message ? e.message : e));
+    } catch (e) {
+      console.error('[BOOKING] Error scheduling admin email:', e && e.message ? e.message : e);
+    }
 
 
     res.json({
