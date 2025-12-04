@@ -226,6 +226,82 @@ async function sendAdminEmail(booking) {
   }
 }
 
+async function sendClientConfirmationEmail(booking) {
+  const transporter = setupMailTransporter();
+  const fromLabel = process.env.FROM_EMAIL || 'Teleka Taxi';
+  const domain = process.env.DOMAIN || `http://localhost:${PORT}`;
+  
+  // Client email — use their phone or a default fallback
+  const clientEmail = booking.email && booking.email !== 'N/A' ? booking.email : null;
+  
+  if (!transporter) {
+    console.log('[EMAIL] Skipping client confirmation — transporter not configured');
+    return;
+  }
+
+  if (!clientEmail) {
+    console.log('[EMAIL] No client email provided for booking', booking._id, '— skipping confirmation email');
+    return;
+  }
+
+  const subject = `Your booking #${booking._id.toString().slice(-8)} is confirmed — ${fromLabel}`;
+
+  const html = `
+    <div style="font-family: Arial, Helvetica, sans-serif; color: #111;">
+      <h2 style="color:#34a853">Booking Confirmed!</h2>
+      <p>Hi <strong>${booking.name || 'there'}</strong>,</p>
+      <p>Your booking has been confirmed. A driver will contact you shortly at <strong>${booking.phone}</strong>.</p>
+      <table cellpadding="6" cellspacing="0" style="border-collapse:collapse; width:100%; max-width:600px; margin: 20px 0;">
+        <tr style="background-color:#f5f5f5;"><td colspan="2"><strong>Booking Details</strong></td></tr>
+        <tr><td style="width:40%;"><strong>Booking ID</strong></td><td>${booking._id.toString().slice(-8)}</td></tr>
+        <tr><td><strong>Pickup</strong></td><td>${booking.pickup}</td></tr>
+        <tr><td><strong>Destination</strong></td><td>${booking.destination}</td></tr>
+        <tr><td><strong>Date / Time</strong></td><td>${booking.date || ''} ${booking.time || ''}</td></tr>
+        <tr><td><strong>Service Type</strong></td><td>${booking.serviceType || 'Standard'}</td></tr>
+        <tr><td><strong>Estimated Fare</strong></td><td>${booking.estimatedPrice || 'To be determined'}</td></tr>
+      </table>
+      <p style="color:#666;">Your driver will contact you shortly. If you have any questions, please reply to this email.</p>
+      <hr />
+      <p style="font-size:0.9rem;color:#999">This is an automated confirmation from ${fromLabel}. Please do not reply with passwords or sensitive information.</p>
+    </div>
+  `;
+
+  const text = `Booking Confirmed!\n\nHi ${booking.name || 'there'},\n\nYour booking #${booking._id.toString().slice(-8)} has been confirmed.\n\nPickup: ${booking.pickup}\nDestination: ${booking.destination}\nDate/Time: ${booking.date || ''} ${booking.time || ''}\nEstimated Fare: ${booking.estimatedPrice || 'To be determined'}\n\nA driver will contact you at ${booking.phone} shortly.\n\nThank you for using ${fromLabel}!`;
+
+  try {
+    const mailPromise = transporter.sendMail({
+      from: `${fromLabel} <${process.env.SMTP_USER || 'no-reply@' + (process.env.DOMAIN ? new URL(process.env.DOMAIN).hostname : 'localhost')}>`,
+      to: clientEmail,
+      subject,
+      text,
+      html
+    });
+
+    const info = await Promise.race([
+      mailPromise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Email send timeout (10s)')), 10000))
+    ]);
+
+    console.log('[EMAIL] Client confirmation sent:', info && info.messageId ? info.messageId : info);
+  } catch (err) {
+    console.error('[EMAIL] Failed sending client confirmation:', err && err.message ? err.message : err);
+    // Persist to queue for retry
+    try {
+      await enqueueEmail({
+        to: clientEmail,
+        from: `${fromLabel} <${process.env.SMTP_USER || 'no-reply@' + (process.env.DOMAIN ? new URL(process.env.DOMAIN).hostname : 'localhost')}>`,
+        subject,
+        text,
+        html,
+        bookingId: booking._id
+      });
+      console.log('[EMAIL] Enqueued client confirmation for retry');
+    } catch (qerr) {
+      console.error('[EMAIL] Failed to enqueue client confirmation:', qerr && qerr.message ? qerr.message : qerr);
+    }
+  }
+}
+
 // ===== Email queue (persistent via MongoDB) =====
 const emailQueueSchema = new mongoose.Schema({
   to: String,
@@ -640,6 +716,13 @@ app.post('/api/bookings/:id/confirm', async (req, res) => {
 
     // broadcast update
     try { sendSseEvent('booking_confirmed', saved.toObject()); } catch (e) { /* ignore */ }
+
+    // Send confirmation email to client asynchronously (don't block response)
+    try {
+      sendClientConfirmationEmail(saved).catch(e => console.error('[BOOKING] Error sending client confirmation:', e && e.message ? e.message : e));
+    } catch (e) {
+      console.error('[BOOKING] Error scheduling client confirmation email:', e && e.message ? e.message : e);
+    }
 
     res.json(saved);
   } catch (error) {
