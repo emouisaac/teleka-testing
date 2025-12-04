@@ -3,6 +3,7 @@ const path = require('path');
 const mongoose = require('mongoose');
 const bcryptjs = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 require('dotenv').config();
 
 const app = express();
@@ -624,6 +625,16 @@ app.post('/api/auth/login', async (req, res) => {
           await user.save();
           isMatch = true;
         }
+        else if (typeof user.password === 'string' && user.password.length === 32) {
+          // Possible MD5 legacy hash
+          const md5 = crypto.createHash('md5').update(trimmedPassword).digest('hex');
+          if (md5 === user.password) {
+            console.log('[AUTH] Legacy MD5 password match — migrating to bcrypt for user:', user._id);
+            user.password = trimmedPassword; // will be hashed by pre-save
+            await user.save();
+            isMatch = true;
+          }
+        }
       } catch (migrateErr) {
         console.error('[AUTH] Error migrating plaintext password:', migrateErr && migrateErr.message ? migrateErr.message : migrateErr);
       }
@@ -838,6 +849,28 @@ app.get('/api/admin/info', async (req, res) => {
     });
   } catch (err) {
     console.error('[ADMIN-INFO] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Debug endpoint: fetch a user by identifier (protected by secret) — useful to inspect stored password format
+app.get('/api/debug/user', async (req, res) => {
+  const secret = (req.query.secret || req.headers['x-admin-secret'] || '').toString();
+  const allowed = process.env.MAINTENANCE_SECRET || process.env.ADMIN_PASS;
+  if (!secret || !allowed || secret !== allowed) return res.status(403).json({ error: 'Unauthorized' });
+
+  const identifier = (req.query.identifier || '').toString().trim();
+  if (!identifier) return res.status(400).json({ error: 'Provide identifier query param' });
+
+  try {
+    const user = await User.findOne({ $or: [{ phone: identifier }, { email: identifier }, { name: { $regex: `^${identifier}$`, $options: 'i' } }] });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const pwd = user.password || '';
+    const looksLikeBcrypt = typeof pwd === 'string' && pwd.startsWith('$2');
+    res.json({ id: user._id, name: user.name, phone: user.phone, email: user.email, role: user.role, passwordInfo: { length: pwd.length, looksLikeBcrypt } });
+  } catch (err) {
+    console.error('[DEBUG-USER] Error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
