@@ -2,12 +2,15 @@ const express = require('express');
 const path = require('path');
 const mongoose = require('mongoose');
 const bcryptjs = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/teleka';
+const JWT_SECRET = process.env.AUTH_SECRET || 'your-default-secret-change-in-production';
+const JWT_EXPIRY = '7d'; // Token valid for 7 days
 
 console.log(`[STARTUP] PORT: ${PORT}`);
 console.log(`[STARTUP] Google Maps API Key: ${GOOGLE_MAPS_API_KEY ? 'LOADED' : 'MISSING'}`);
@@ -62,14 +65,16 @@ const userSchema = new mongoose.Schema({
 });
 
 // Hash password before saving
-userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next();
+userSchema.pre('save', async function() {
+  // Using an async pre hook: do NOT use the `next` callback parameter here.
+  // If password wasn't modified, simply return to continue.
+  if (!this.isModified('password')) return;
   try {
     const salt = await bcryptjs.genSalt(10);
     this.password = await bcryptjs.hash(this.password, salt);
-    next();
   } catch (err) {
-    next(err);
+    // Re-throw to let Mongoose handle the error for async middleware
+    throw err;
   }
 });
 
@@ -389,32 +394,40 @@ app.post('/api/bookings/clear-all', async (req, res) => {
 
 // Register
 app.post('/api/auth/register', async (req, res) => {
-  const { name, phone, password } = req.body;
+  const { name, phone, email, password } = req.body;
 
   if (!phone || !password) {
     return res.status(400).json({ error: 'Phone and password are required' });
   }
 
   try {
+    // Build query: check by phone or email (if provided)
+    const existsQuery = email ? { $or: [{ phone }, { email }] } : { phone };
+
     // Check if user already exists
-    let user = await User.findOne({ $or: [{ phone }, { email: phone }] });
+    let user = await User.findOne(existsQuery);
     if (user) {
       return res.status(400).json({ error: 'User already exists' });
     }
 
-    // Create new user
+    // Create new user (include email when provided)
     user = new User({
       name: name || phone,
       phone,
+      email: email || undefined,
       password,
       role: 'client'
     });
 
     const saved = await user.save();
-    console.log(`[AUTH] New user registered: ${saved.phone}`);
+    console.log(`[AUTH] New user registered: ${saved.phone} ${saved.email ? '<' + saved.email + '>' : ''}`);
 
-    // Create token (simple JWT-like; for production use jsonwebtoken)
-    const token = Buffer.from(saved._id.toString()).toString('base64');
+    // Create JWT token
+    const token = jwt.sign(
+      { id: saved._id.toString(), phone: saved.phone, role: saved.role },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRY }
+    );
 
     res.json({
       success: true,
@@ -423,13 +436,14 @@ app.post('/api/auth/register', async (req, res) => {
         id: saved._id,
         name: saved.name,
         phone: saved.phone,
+        email: saved.email,
         role: saved.role
       },
       message: 'User registered successfully'
     });
   } catch (error) {
-    console.error('[AUTH] Register error:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('[AUTH] Register error:', error.stack || error.message);
+    res.status(500).json({ error: (error && error.message) || 'Registration failed' });
   }
 });
 
@@ -442,8 +456,14 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   try {
-    // Find user by phone or admin id
-    const user = await User.findOne({ $or: [{ phone: identifier }, { name: identifier }] });
+    // Find user by phone, email, or name (admin id)
+    const user = await User.findOne({ 
+      $or: [
+        { phone: identifier }, 
+        { email: identifier },
+        { name: identifier }
+      ] 
+    });
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -455,8 +475,12 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Create token (simple base64; for production use jsonwebtoken)
-    const token = Buffer.from(user._id.toString()).toString('base64');
+    // Create JWT token
+    const token = jwt.sign(
+      { id: user._id.toString(), phone: user.phone, role: user.role },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRY }
+    );
 
     console.log(`[AUTH] User logged in: ${user.phone} (${user.role})`);
 
@@ -467,6 +491,7 @@ app.post('/api/auth/login', async (req, res) => {
         id: user._id,
         name: user.name,
         phone: user.phone,
+        email: user.email,
         role: user.role
       }
     });
@@ -514,7 +539,9 @@ app.use((req, res, next) => {
   if (req.method === 'GET' && !req.path.startsWith('/api')) {
     return res.sendFile(path.join(__dirname, 'client', 'index.html'));
   }
-  next();
+  // Guard: ensure next is a function before calling
+  if (typeof next === 'function') return next();
+  return res.end();
 });
 
 // ============ Server Start ============

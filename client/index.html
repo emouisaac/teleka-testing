@@ -2247,8 +2247,8 @@
 
                     <form class="auth-form" id="loginForm" data-form="login">
                         <div class="form-group">
-                            <label for="loginPhone">Phone or Admin ID</label>
-                            <input id="loginPhone" name="identifier" type="text" placeholder="2567xxxxxxx or admin" required>
+                            <label for="loginIdentifier">Phone or Email</label>
+                            <input id="loginIdentifier" name="identifier" type="text" placeholder="2567xxxxxxx or you@example.com" required>
                         </div>
                         <div class="form-group">
                             <label for="loginPassword">Password</label>
@@ -2266,7 +2266,11 @@
                             <input id="regName" name="name" type="text" placeholder="Your full name" required>
                         </div>
                         <div class="form-group">
-                            <label for="regPhone">Phone</label>
+                            <label for="regEmail">Active Email</label>
+                            <input id="regEmail" name="email" type="email" placeholder="you@example.com" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="regPhone">Phone / WhatsApp Number</label>
                             <input id="regPhone" name="phone" type="text" placeholder="2567xxxxxxx" required>
                         </div>
                         <div class="form-group">
@@ -2424,9 +2428,9 @@
                     submitBtn.textContent = 'Signing in...';
                     submitBtn.disabled = true;
 
-                    const identifier = document.getElementById('loginPhone').value.trim();
+                    const identifier = document.getElementById('loginIdentifier').value.trim();
                     const password = document.getElementById('loginPassword').value;
-                    if(!identifier || !password){ showError('Please enter both identifier and password'); submitBtn.textContent = origText; submitBtn.disabled = false; return; }
+                    if(!identifier || !password){ showError('Please enter both phone/email and password'); submitBtn.textContent = origText; submitBtn.disabled = false; return; }
 
                     const res = await postJSON('/api/auth/login', { identifier, password });
                     if(res.ok && res.json && res.json.token){
@@ -2451,12 +2455,13 @@
                     submitBtn.disabled = true;
 
                     const name = document.getElementById('regName').value.trim();
+                    const email = document.getElementById('regEmail').value.trim();
                     const phone = document.getElementById('regPhone').value.trim();
                     const password = document.getElementById('regPassword').value;
 
-                    if(!name || !phone || !password){ showError('Name, phone and password are required'); submitBtn.textContent = origText; submitBtn.disabled = false; return; }
+                    if(!name || !phone || !password || !email){ showError('Name, email, phone and password are required'); submitBtn.textContent = origText; submitBtn.disabled = false; return; }
 
-                    const res = await postJSON('/api/auth/register', { name, phone, password });
+                    const res = await postJSON('/api/auth/register', { name, email, phone, password });
                     if(res.ok && res.json){
                         // If server returns token, store and redirect; otherwise show success and switch to login
                         if(res.json.token){
