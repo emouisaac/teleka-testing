@@ -86,7 +86,17 @@ userSchema.pre('save', async function() {
 
 // Compare password method
 userSchema.methods.comparePassword = async function(plainPassword) {
-  return await bcryptjs.compare(plainPassword, this.password);
+  try {
+    // If no stored hash, return false instead of letting bcrypt throw
+    if (!this.password || typeof this.password !== 'string') return false;
+    // Ensure both args are strings
+    if (typeof plainPassword !== 'string') return false;
+    return await bcryptjs.compare(plainPassword, this.password);
+  } catch (err) {
+    // Log and return false — do not propagate bcrypt internal errors to callers
+    console.error('[AUTH] comparePassword error:', err && err.message ? err.message : err);
+    return false;
+  }
 };
 
 const Booking = mongoose.model('Booking', bookingSchema);
