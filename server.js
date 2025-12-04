@@ -14,47 +14,9 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/teleka
 const JWT_SECRET = process.env.AUTH_SECRET || 'your-default-secret-change-in-production';
 const JWT_EXPIRY = '7d'; // Token valid for 7 days
 
-// Email / SMTP configuration (optional)
-const SMTP_HOST = process.env.SMTP_HOST;
-const SMTP_PORT = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : undefined;
-const SMTP_USER = process.env.SMTP_USER;
-const SMTP_PASS = process.env.SMTP_PASS;
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'emouisaac1@gmail.com';
-const FROM_EMAIL = process.env.FROM_EMAIL || SMTP_USER || ADMIN_EMAIL;
-
-let mailTransporter = null;
-if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
-  try {
-    mailTransporter = nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: SMTP_PORT || 587,
-      secure: SMTP_PORT === 465, // true for 465, false for other ports
-      auth: {
-        user: SMTP_USER,
-        pass: SMTP_PASS
-      }
-    });
-    // Verify connection configuration (non-blocking)
-    mailTransporter.verify().then(() => console.log('[EMAIL] SMTP transporter verified')).catch(err => console.warn('[EMAIL] SMTP verify failed:', err && err.message));
-  } catch (err) {
-    console.error('[EMAIL] Failed to create mail transporter:', err && err.message);
-    mailTransporter = null;
-  }
-} else {
-  console.log('[EMAIL] SMTP not configured - admin notifications will be skipped');
-  console.log('[EMAIL] Missing:', {
-    SMTP_HOST: !SMTP_HOST ? 'NOT SET' : 'SET',
-    SMTP_USER: !SMTP_USER ? 'NOT SET' : 'SET',
-    SMTP_PASS: !SMTP_PASS ? 'NOT SET' : 'SET'
-  });
-}
-
 console.log(`[STARTUP] PORT: ${PORT}`);
 console.log(`[STARTUP] Google Maps API Key: ${GOOGLE_MAPS_API_KEY ? 'LOADED' : 'MISSING'}`);
 console.log(`[STARTUP] MongoDB URI: ${MONGODB_URI}`);
-console.log(`[STARTUP] EMAIL/SMTP: ${mailTransporter ? 'CONFIGURED' : 'NOT CONFIGURED'}`);
-console.log(`[STARTUP] ADMIN_EMAIL: ${process.env.ADMIN_EMAIL || 'NOT SET'}`);
-console.log(`[STARTUP] FROM_EMAIL: ${FROM_EMAIL || 'NOT SET'}`);
 
 // Middleware
 app.use(express.json());
@@ -158,20 +120,90 @@ userSchema.methods.comparePassword = async function(plainPassword) {
 const Booking = mongoose.model('Booking', bookingSchema);
 const User = mongoose.model('User', userSchema);
 
-// Notification schema (store attempted email notifications)
-const notificationSchema = new mongoose.Schema({
-  booking: { type: mongoose.Schema.Types.ObjectId, ref: 'Booking', default: null },
-  to: String,
-  subject: String,
-  text: String,
-  html: String,
-  sent: { type: Boolean, default: false },
-  info: mongoose.Schema.Types.Mixed,
-  error: String,
-  createdAt: { type: Date, default: Date.now }
-});
+// ===== Email setup =====
+let mailTransporter = null;
+function setupMailTransporter() {
+  if (mailTransporter) return mailTransporter;
+  const host = process.env.SMTP_HOST;
+  const port = parseInt(process.env.SMTP_PORT || '587', 10);
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  const secure = (process.env.SMTP_SECURE || 'false').toLowerCase() === 'true';
 
-const Notification = mongoose.model('Notification', notificationSchema);
+  if (!host) {
+    console.warn('[EMAIL] SMTP_HOST not configured. Emails will not be sent.');
+    return null;
+  }
+
+  try {
+    mailTransporter = nodemailer.createTransport({
+      host,
+      port,
+      secure: secure, // true for 465, false for other ports
+      auth: user && pass ? { user, pass } : undefined
+    });
+
+    // verify connection (non-blocking but helpful log)
+    mailTransporter.verify((err, success) => {
+      if (err) console.warn('[EMAIL] Transport verification failed:', err.message || err);
+      else console.log('[EMAIL] SMTP transporter is ready');
+    });
+    return mailTransporter;
+  } catch (err) {
+    console.error('[EMAIL] Failed to create transporter:', err && err.message ? err.message : err);
+    return null;
+  }
+}
+
+async function sendAdminEmail(booking) {
+  const transporter = setupMailTransporter();
+  const adminEmail = (process.env.ADMIN_EMAIL || 'emouisaac1@gmail.com').toString();
+  const fromLabel = process.env.FROM_EMAIL || 'Teleka Taxi';
+  const domain = process.env.DOMAIN || `http://localhost:${PORT}`;
+
+  if (!transporter) {
+    console.log('[EMAIL] Skipping send - transporter not configured. Booking details:', booking);
+    return;
+  }
+
+  const subject = `New booking received — ${fromLabel}`;
+
+  const html = `
+    <div style="font-family: Arial, Helvetica, sans-serif; color: #111;">
+      <h2 style="color:#1a73e8">New Booking Received</h2>
+      <p>A new booking was submitted on <strong>${new Date(booking.createdAt).toLocaleString()}</strong>.</p>
+      <table cellpadding="6" cellspacing="0" style="border-collapse:collapse; width:100%; max-width:600px;">
+        <tr><td><strong>Booking ID</strong></td><td>${booking._id}</td></tr>
+        <tr><td><strong>Name</strong></td><td>${booking.name || 'N/A'}</td></tr>
+        <tr><td><strong>Phone</strong></td><td>${booking.phone || 'N/A'}</td></tr>
+        <tr><td><strong>Pickup</strong></td><td>${booking.pickup}</td></tr>
+        <tr><td><strong>Destination</strong></td><td>${booking.destination}</td></tr>
+        <tr><td><strong>Date / Time</strong></td><td>${booking.date || ''} ${booking.time || ''}</td></tr>
+        <tr><td><strong>Service</strong></td><td>${booking.serviceType || ''}</td></tr>
+        <tr><td><strong>Estimated Price</strong></td><td>${booking.estimatedPrice || ''}</td></tr>
+        <tr><td><strong>Notes</strong></td><td>${booking.notes || ''}</td></tr>
+      </table>
+      <p style="margin-top:18px;">View/manage bookings: <a href="${domain}/admin/" target="_blank">Admin Dashboard</a></p>
+      <hr />
+      <p style="font-size:0.9rem;color:#666">This is an automated notification from ${fromLabel}.</p>
+    </div>
+  `;
+
+  const text = `New booking ${booking._id}\nName: ${booking.name}\nPhone: ${booking.phone}\nPickup: ${booking.pickup}\nDestination: ${booking.destination}\nDate/Time: ${booking.date || ''} ${booking.time || ''}\nNotes: ${booking.notes || ''}\nView: ${domain}/admin/`;
+
+  try {
+    const info = await transporter.sendMail({
+      from: `${fromLabel} <${process.env.SMTP_USER || 'no-reply@' + (process.env.DOMAIN ? new URL(process.env.DOMAIN).hostname : 'localhost')}>`,
+      to: adminEmail,
+      subject,
+      text,
+      html
+    });
+    console.log('[EMAIL] Admin notification sent:', info && info.messageId ? info.messageId : info);
+  } catch (err) {
+    console.error('[EMAIL] Failed sending admin notification:', err && err.message ? err.message : err);
+  }
+}
 
 // Server-Sent Events clients
 const sseClients = [];
@@ -187,69 +219,6 @@ function sendSseEvent(event, data) {
   });
 }
 
-// Send email notification to admin about a new booking
-async function sendAdminNotification(booking) {
-  try {
-    if (!mailTransporter) {
-      console.log('[EMAIL] Skipping admin notification — no transporter configured');
-      console.log('[EMAIL] To enable: set SMTP_HOST, SMTP_USER, SMTP_PASS env vars');
-      return;
-    }
-
-    const subject = `New booking: ${booking.name} — ${booking.pickup} → ${booking.destination}`;
-    const text = `A new booking was created:\n\nID: ${booking._id}\nName: ${booking.name}\nPhone: ${booking.phone}\nPickup: ${booking.pickup}\nDestination: ${booking.destination}\nDate: ${booking.date || 'N/A'}\nTime: ${booking.time || 'N/A'}\nEstimated Price: ${booking.estimatedPrice || 'N/A'}\nNotes: ${booking.notes || ''}\n\nView in admin panel when available.`;
-    const html = `<h2>New Booking</h2>
-      <p><strong>ID:</strong> ${booking._id}</p>
-      <p><strong>Name:</strong> ${booking.name}</p>
-      <p><strong>Phone:</strong> ${booking.phone}</p>
-      <p><strong>Pickup:</strong> ${booking.pickup}</p>
-      <p><strong>Destination:</strong> ${booking.destination}</p>
-      <p><strong>Date:</strong> ${booking.date || 'N/A'}</p>
-      <p><strong>Time:</strong> ${booking.time || 'N/A'}</p>
-      <p><strong>Estimated Price:</strong> ${booking.estimatedPrice || 'N/A'}</p>
-      <p><strong>Notes:</strong> ${booking.notes || ''}</p>
-      <hr/>
-      <p>This is an automated notification from your Teleka server.</p>`;
-
-    const mailOptions = {
-      from: FROM_EMAIL,
-      to: ADMIN_EMAIL,
-      subject,
-      text,
-      html
-    };
-
-    // If transporter is not present or we're running locally, persist notification instead of sending
-    const runningLocal = (process.env.NODE_ENV || '').toLowerCase() !== 'production' || process.env.DISABLE_EMAIL_LOCAL === 'true';
-
-    if (!mailTransporter || runningLocal) {
-      console.log('[EMAIL] Mail disabled or running locally — storing notification in DB');
-      try {
-        const n = new Notification({ booking: booking._id, to: ADMIN_EMAIL, subject, text, html, sent: false });
-        await n.save();
-        console.log('[EMAIL] Notification stored with id:', n._id);
-      } catch (err) {
-        console.error('[EMAIL] ERROR storing notification:', err && err.message);
-      }
-      return;
-    }
-
-    console.log(`[EMAIL] Sending notification to ${ADMIN_EMAIL}...`);
-    const info = await mailTransporter.sendMail(mailOptions);
-    console.log('[EMAIL] Admin notification sent successfully:', info && (info.messageId || info.response));
-
-    // record a successful notification in DB
-    try {
-      const n = new Notification({ booking: booking._id, to: ADMIN_EMAIL, subject, text, html, sent: true, info });
-      await n.save();
-    } catch (err) {
-      console.error('[EMAIL] ERROR saving sent notification:', err && err.message);
-    }
-  } catch (err) {
-    console.error('[EMAIL] ERROR sending admin notification:', err && err.message ? err.message : err);
-    console.error('[EMAIL] Stack:', err && err.stack ? err.stack : '');
-  }
-}
 
 // ============ API Endpoints ============
 
@@ -421,8 +390,9 @@ app.post('/api/bookings', async (req, res) => {
     // Broadcast new booking to SSE clients
     try { sendSseEvent('booking_created', saved.toObject()); } catch (e) { /* ignore */ }
 
-    // Send admin email notification (fire-and-forget)
-    try { sendAdminNotification(saved); } catch (e) { console.error('[BOOKING] sendAdminNotification threw:', e && e.message); }
+    // Notify admin by email (best-effort)
+    try { await sendAdminEmail(saved); } catch (e) { console.error('[BOOKING] Error sending admin email:', e && e.message ? e.message : e); }
+
 
     res.json({
       success: true,
@@ -997,80 +967,9 @@ app.get('/api/debug/user', async (req, res) => {
 });
 
 // Debug endpoint: test email configuration and send test email
-app.post('/api/debug/test-email', async (req, res) => {
-  const secret = (req.query.secret || req.headers['x-admin-secret'] || '').toString();
-  const allowed = process.env.MAINTENANCE_SECRET || process.env.ADMIN_PASS;
-  if (!secret || !allowed || secret !== allowed) return res.status(403).json({ error: 'Unauthorized' });
+// (email test endpoint removed)
 
-  try {
-    const config = {
-      smtp_host: SMTP_HOST || 'NOT_SET',
-      smtp_port: SMTP_PORT || 'NOT_SET',
-      smtp_user: SMTP_USER ? '***' : 'NOT_SET',
-      smtp_pass: SMTP_PASS ? '***' : 'NOT_SET',
-      from_email: FROM_EMAIL || 'NOT_SET',
-      admin_email: ADMIN_EMAIL || 'NOT_SET',
-      transporter_ready: !!mailTransporter
-    };
-
-    if (!mailTransporter) {
-      // store a test notification instead of sending
-      try {
-        const n = new Notification({ to: ADMIN_EMAIL, subject: '[TEST] Teleka Email Configuration Test', text: 'Test stored (transporter missing)', html: '<p>Stored test</p>', sent: false });
-        await n.save();
-        return res.status(400).json({ error: 'Email transporter not configured - test saved to DB', config, notificationSaved: n._id });
-      } catch (err) {
-        return res.status(500).json({ error: 'Email transporter not configured and saving to DB failed', config, saveError: err && err.message });
-      }
-    }
-
-    const testInfo = await mailTransporter.sendMail({
-      from: FROM_EMAIL,
-      to: ADMIN_EMAIL,
-      subject: '[TEST] Teleka Email Configuration Test',
-      text: 'This is a test email to verify SMTP configuration is working on Render.',
-      html: '<h3>Test Email</h3><p>SMTP configuration is working correctly.</p>'
-    });
-
-    // Save a record of the test email
-    try {
-      const n = new Notification({ to: ADMIN_EMAIL, subject: '[TEST] Teleka Email Configuration Test', text: 'Sent test', html: '<p>Sent test</p>', sent: true, info: testInfo });
-      await n.save();
-    } catch (err) {
-      console.error('[DEBUG-EMAIL] Error saving test notification:', err && err.message);
-    }
-
-    res.json({ success: true, message: 'Test email sent', messageId: testInfo.messageId, config });
-  } catch (err) {
-    console.error('[DEBUG-EMAIL] Test email error:', err && err.message);
-    res.status(500).json({ 
-      error: err && err.message ? err.message : 'Email send failed',
-      config: {
-        smtp_host: SMTP_HOST || 'NOT_SET',
-        smtp_port: SMTP_PORT || 'NOT_SET',
-        smtp_user: SMTP_USER ? '***' : 'NOT_SET',
-        from_email: FROM_EMAIL || 'NOT_SET',
-        admin_email: ADMIN_EMAIL || 'NOT_SET',
-        transporter_ready: !!mailTransporter
-      }
-    });
-  }
-});
-
-// Admin: fetch saved notifications (protected by secret)
-app.get('/api/notifications', async (req, res) => {
-  const secret = (req.query.secret || req.headers['x-admin-secret'] || '').toString();
-  const allowed = process.env.MAINTENANCE_SECRET || process.env.ADMIN_PASS;
-  if (!secret || !allowed || secret !== allowed) return res.status(403).json({ error: 'Unauthorized' });
-
-  try {
-    const notes = await Notification.find().sort({ createdAt: -1 }).limit(200).lean();
-    res.json({ success: true, count: notes.length, notifications: notes });
-  } catch (err) {
-    console.error('[NOTIF] Error fetching notifications:', err && err.message);
-    res.status(500).json({ error: err && err.message });
-  }
-});
+// (notifications endpoint removed)
 
 // ============ SSE Endpoint ============
 
