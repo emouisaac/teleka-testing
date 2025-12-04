@@ -1073,6 +1073,9 @@
                 <button class="theme-toggle" id="themeToggle">
                     <i class="fas fa-moon"></i>
                 </button>
+                <button class="theme-toggle" id="clientSoundToggle" title="Toggle notification sound">
+                    <i class="fas fa-volume-up"></i>
+                </button>
                 <button type="button" class="btn btn-outline" id="loginBtn">Login</button>
                 <button class="mobile-menu">
                     <i class="fas fa-bars"></i>
@@ -1362,6 +1365,122 @@
 
     <script>
 
+        // ============ CLIENT NOTIFICATIONS =============
+        let clientSoundEnabled = localStorage.getItem('clientNotificationSound') !== 'off';
+
+        // Notification sound (using Web Audio API to generate a pleasant confirmation beep)
+        function playConfirmationSound() {
+            if (!clientSoundEnabled) return;
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const now = audioContext.currentTime;
+                
+                // Create a pleasant rising tone sequence (confirmation sound)
+                const frequencies = [523.25, 659.25, 783.99]; // C5, E5, G5
+                for (let i = 0; i < frequencies.length; i++) {
+                    const osc = audioContext.createOscillator();
+                    const gain = audioContext.createGain();
+                    osc.connect(gain);
+                    gain.connect(audioContext.destination);
+                    
+                    osc.frequency.value = frequencies[i];
+                    gain.gain.setValueAtTime(0.25, now + i * 0.12);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.12 + 0.1);
+                    
+                    osc.start(now + i * 0.12);
+                    osc.stop(now + i * 0.12 + 0.1);
+                }
+            } catch (e) {
+                console.error('Error playing confirmation sound:', e);
+            }
+        }
+
+        // Show browser notification for confirmed booking
+        function showConfirmationNotification(booking) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                try {
+                    new Notification('Your booking is confirmed! 🎉', {
+                        icon: '../ims/1110.png',
+                        badge: '../ims/1110.png',
+                        tag: 'booking-confirmed',
+                        requireInteraction: true,
+                        body: `Your ride from ${booking.pickup} to ${booking.destination} has been confirmed. A driver will contact you at ${booking.phone}.`
+                    });
+                } catch (e) {
+                    console.error('Error showing confirmation notification:', e);
+                }
+            }
+        }
+
+        // Show popup alert for confirmed booking
+        function showConfirmationAlert(booking) {
+            const alertDiv = document.createElement('div');
+            alertDiv.style.cssText = `
+                position: fixed;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: linear-gradient(135deg, #34a853 0%, #1e8e3e 100%);
+                color: white;
+                padding: 25px 30px;
+                border-radius: 12px;
+                box-shadow: 0 15px 50px rgba(0,0,0,0.4);
+                z-index: 10000;
+                max-width: 500px;
+                animation: slideDown 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                text-align: center;
+            `;
+
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes slideDown {
+                    from { 
+                        transform: translateX(-50%) translateY(-100px);
+                        opacity: 0;
+                    }
+                    to { 
+                        transform: translateX(-50%) translateY(0);
+                        opacity: 1;
+                    }
+                }
+                @keyframes bounce {
+                    0%, 100% { transform: scale(1); }
+                    50% { transform: scale(1.15); }
+                }
+            `;
+            document.head.appendChild(style);
+
+            alertDiv.innerHTML = `
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 12px;">
+                    <div style="font-size: 48px; animation: bounce 0.6s ease-in-out;">✓</div>
+                    <h2 style="margin: 0; font-size: 1.3rem; font-weight: 700;">Your Booking is Confirmed!</h2>
+                    <p style="margin: 0; font-size: 1rem; opacity: 0.95;">A driver will contact you shortly</p>
+                    <p style="margin: 5px 0 0 0; font-size: 0.9rem; opacity: 0.85;">
+                        <i class="fas fa-phone" style="margin-right: 5px;"></i>
+                        ${booking.phone}
+                    </p>
+                </div>
+            `;
+
+            document.body.appendChild(alertDiv);
+
+            // Auto-remove after 6 seconds
+            setTimeout(() => {
+                if (alertDiv.parentElement) {
+                    alertDiv.style.animation = 'slideDown 0.4s ease-in reverse';
+                    setTimeout(() => alertDiv.remove(), 400);
+                }
+            }, 6000);
+        }
+
+        // Request notification permission
+        function requestClientNotificationPermission() {
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
+        }
+
         // ============ NEW AUTOCOMPLETE SYSTEM ============
         // Handles all typing inputs for pickup & destination with live suggestions
         (function() {
@@ -1638,6 +1757,28 @@
                 updateThemeIcon(isDark);
                 localStorage.setItem(THEME_KEY, isDark ? 'dark' : 'light');
             });
+        }
+
+        // Initialize client notification permissions and sound toggle
+        requestClientNotificationPermission();
+        const clientSoundToggle = document.getElementById('clientSoundToggle');
+        if (clientSoundToggle) {
+            clientSoundToggle.addEventListener('click', () => {
+                clientSoundEnabled = !clientSoundEnabled;
+                localStorage.setItem('clientNotificationSound', clientSoundEnabled ? 'on' : 'off');
+                const icon = clientSoundToggle.querySelector('i');
+                if (clientSoundEnabled) {
+                    icon.className = 'fas fa-volume-up';
+                    playConfirmationSound(); // test beep
+                } else {
+                    icon.className = 'fas fa-volume-mute';
+                }
+            });
+            // Update button display based on stored preference
+            const icon = clientSoundToggle.querySelector('i');
+            if (!clientSoundEnabled) {
+                icon.className = 'fas fa-volume-mute';
+            }
         }
 
             // Removed testimonial slider code
@@ -2202,6 +2343,12 @@
                         try {
                             const data = JSON.parse(ev.data);
                             console.log('SSE booking_confirmed', data);
+                            
+                            // Show confirmation alerts and sound for the client
+                            playConfirmationSound();
+                            showConfirmationAlert(data);
+                            showConfirmationNotification(data);
+                            
                             // If the confirmed booking belongs to the logged-in user, refresh ride list
                             (async () => {
                                 await updateNavRideBadge();
