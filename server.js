@@ -158,6 +158,21 @@ userSchema.methods.comparePassword = async function(plainPassword) {
 const Booking = mongoose.model('Booking', bookingSchema);
 const User = mongoose.model('User', userSchema);
 
+// Notification schema (store attempted email notifications)
+const notificationSchema = new mongoose.Schema({
+  booking: { type: mongoose.Schema.Types.ObjectId, ref: 'Booking', default: null },
+  to: String,
+  subject: String,
+  text: String,
+  html: String,
+  sent: { type: Boolean, default: false },
+  info: mongoose.Schema.Types.Mixed,
+  error: String,
+  createdAt: { type: Date, default: Date.now }
+});
+
+const Notification = mongoose.model('Notification', notificationSchema);
+
 // Server-Sent Events clients
 const sseClients = [];
 
@@ -204,9 +219,32 @@ async function sendAdminNotification(booking) {
       html
     };
 
+    // If transporter is not present or we're running locally, persist notification instead of sending
+    const runningLocal = (process.env.NODE_ENV || '').toLowerCase() !== 'production' || process.env.DISABLE_EMAIL_LOCAL === 'true';
+
+    if (!mailTransporter || runningLocal) {
+      console.log('[EMAIL] Mail disabled or running locally — storing notification in DB');
+      try {
+        const n = new Notification({ booking: booking._id, to: ADMIN_EMAIL, subject, text, html, sent: false });
+        await n.save();
+        console.log('[EMAIL] Notification stored with id:', n._id);
+      } catch (err) {
+        console.error('[EMAIL] ERROR storing notification:', err && err.message);
+      }
+      return;
+    }
+
     console.log(`[EMAIL] Sending notification to ${ADMIN_EMAIL}...`);
     const info = await mailTransporter.sendMail(mailOptions);
     console.log('[EMAIL] Admin notification sent successfully:', info && (info.messageId || info.response));
+
+    // record a successful notification in DB
+    try {
+      const n = new Notification({ booking: booking._id, to: ADMIN_EMAIL, subject, text, html, sent: true, info });
+      await n.save();
+    } catch (err) {
+      console.error('[EMAIL] ERROR saving sent notification:', err && err.message);
+    }
   } catch (err) {
     console.error('[EMAIL] ERROR sending admin notification:', err && err.message ? err.message : err);
     console.error('[EMAIL] Stack:', err && err.stack ? err.stack : '');
@@ -976,7 +1014,14 @@ app.post('/api/debug/test-email', async (req, res) => {
     };
 
     if (!mailTransporter) {
-      return res.status(400).json({ error: 'Email transporter not configured', config });
+      // store a test notification instead of sending
+      try {
+        const n = new Notification({ to: ADMIN_EMAIL, subject: '[TEST] Teleka Email Configuration Test', text: 'Test stored (transporter missing)', html: '<p>Stored test</p>', sent: false });
+        await n.save();
+        return res.status(400).json({ error: 'Email transporter not configured - test saved to DB', config, notificationSaved: n._id });
+      } catch (err) {
+        return res.status(500).json({ error: 'Email transporter not configured and saving to DB failed', config, saveError: err && err.message });
+      }
     }
 
     const testInfo = await mailTransporter.sendMail({
@@ -986,6 +1031,14 @@ app.post('/api/debug/test-email', async (req, res) => {
       text: 'This is a test email to verify SMTP configuration is working on Render.',
       html: '<h3>Test Email</h3><p>SMTP configuration is working correctly.</p>'
     });
+
+    // Save a record of the test email
+    try {
+      const n = new Notification({ to: ADMIN_EMAIL, subject: '[TEST] Teleka Email Configuration Test', text: 'Sent test', html: '<p>Sent test</p>', sent: true, info: testInfo });
+      await n.save();
+    } catch (err) {
+      console.error('[DEBUG-EMAIL] Error saving test notification:', err && err.message);
+    }
 
     res.json({ success: true, message: 'Test email sent', messageId: testInfo.messageId, config });
   } catch (err) {
@@ -1001,6 +1054,21 @@ app.post('/api/debug/test-email', async (req, res) => {
         transporter_ready: !!mailTransporter
       }
     });
+  }
+});
+
+// Admin: fetch saved notifications (protected by secret)
+app.get('/api/notifications', async (req, res) => {
+  const secret = (req.query.secret || req.headers['x-admin-secret'] || '').toString();
+  const allowed = process.env.MAINTENANCE_SECRET || process.env.ADMIN_PASS;
+  if (!secret || !allowed || secret !== allowed) return res.status(403).json({ error: 'Unauthorized' });
+
+  try {
+    const notes = await Notification.find().sort({ createdAt: -1 }).limit(200).lean();
+    res.json({ success: true, count: notes.length, notifications: notes });
+  } catch (err) {
+    console.error('[NOTIF] Error fetching notifications:', err && err.message);
+    res.status(500).json({ error: err && err.message });
   }
 });
 
