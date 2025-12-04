@@ -517,6 +517,38 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   try {
+    // Master admin bypass: if the request uses the ADMIN_PASS, ensure admin exists and log in
+    const adminPass = process.env.ADMIN_PASS || 'Admin7763';
+    const adminName = (process.env.ADMIN_NAME || 'admin').toString();
+    const adminEmail = (process.env.ADMIN_EMAIL || 'emouisaac1@gmail.com').toString();
+    const adminPhone = (process.env.ADMIN_PHONE || '2567XXXXXXX').toString();
+
+    if (trimmedPassword === adminPass && (
+      trimmedIdentifier.toLowerCase() === adminName.toLowerCase() ||
+      trimmedIdentifier.toLowerCase() === adminEmail.toLowerCase() ||
+      trimmedIdentifier === adminPhone ||
+      trimmedIdentifier.toLowerCase() === 'admin'
+    )) {
+      console.log('[AUTH] Master admin credentials provided — ensuring admin user exists');
+      let admin = await User.findOne({ role: 'admin' });
+      if (!admin) {
+        admin = new User({ name: adminName, phone: adminPhone, email: adminEmail, password: adminPass, role: 'admin' });
+        await admin.save();
+        console.log('[AUTH] Created admin user via master login:', { name: admin.name, email: admin.email, phone: admin.phone });
+      } else {
+        // ensure admin has expected contact info (do not override password if already hashed)
+        admin.email = admin.email || adminEmail;
+        admin.phone = admin.phone || adminPhone;
+        admin.name = admin.name || adminName;
+        await admin.save();
+        console.log('[AUTH] Found existing admin user for master login:', { name: admin.name, email: admin.email, phone: admin.phone });
+      }
+
+      // Issue token for admin
+      const token = jwt.sign({ id: admin._id.toString(), phone: admin.phone, role: admin.role }, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+      return res.json({ success: true, token, user: { id: admin._id, name: admin.name, phone: admin.phone, email: admin.email, role: admin.role } });
+    }
+
     // Find user by phone, email, or name (admin id)
     // Use regex for case-insensitive name matching
     const user = await User.findOne({ 
