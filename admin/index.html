@@ -1341,23 +1341,30 @@
                 const password = document.getElementById('loginPassword').value;
                 if(!identifier || !password){ showError('Please enter both identifier and password'); submitBtn.textContent = origText; submitBtn.disabled = false; return; }
 
+                console.log('[LOGIN] Attempting login with identifier:', identifier);
                 const res = await postJSON('/api/auth/login', { identifier, password });
+                console.log('[LOGIN] Response:', { ok: res.ok, status: res.status, json: res.json });
+                
                 if(res.ok && res.json && res.json.token){
                     // Only allow admin account to sign in on this page
                     const user = res.json.user || {};
                     const isAdmin = (user.role === 'admin');
+                    console.log('[LOGIN] User role:', user.role, 'Is admin:', isAdmin);
+                    
                     if(!isAdmin){
                         showError('Not authorized to access admin dashboard');
                         submitBtn.textContent = origText;
                         submitBtn.disabled = false;
                         return;
                     }
+                    console.log('[LOGIN] Admin authenticated successfully');
                     localStorage.setItem('authToken', res.json.token);
                     if(res.json.user) localStorage.setItem('authUser', JSON.stringify(res.json.user));
                     if(res.json.redirect) window.location.href = res.json.redirect;
                     else { closeModal(); location.reload(); }
                 } else {
                     const msg = (res.json && (res.json.message || res.json.error)) || (res.error && res.error.message) || 'Invalid credentials';
+                    console.error('[LOGIN] Failed:', msg);
                     showError(msg);
                     submitBtn.textContent = origText;
                     submitBtn.disabled = false;

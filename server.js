@@ -19,6 +19,22 @@ console.log(`[STARTUP] MongoDB URI: ${MONGODB_URI}`);
 // Middleware
 app.use(express.json());
 
+// CORS Middleware
+app.use((req, res, next) => {
+  const origin = req.headers.origin || '*';
+  res.header('Access-Control-Allow-Origin', origin);
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  
+  next();
+});
+
 // ============ MongoDB Connection ============
 mongoose.connect(MONGODB_URI, {
   serverSelectionTimeoutMS: 5000,
@@ -478,7 +494,10 @@ app.post('/api/auth/register', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   const { identifier, password } = req.body;
 
+  console.log(`[AUTH] Login attempt with identifier: ${identifier}`);
+
   if (!identifier || !password) {
+    console.log('[AUTH] Missing identifier or password');
     return res.status(400).json({ error: 'Identifier and password are required' });
   }
 
@@ -493,12 +512,16 @@ app.post('/api/auth/login', async (req, res) => {
     });
 
     if (!user) {
+      console.log(`[AUTH] User not found for identifier: ${identifier}`);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
+
+    console.log(`[AUTH] User found: ${user.name} (${user.role}), comparing password...`);
 
     // Compare password
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
+      console.log(`[AUTH] Password mismatch for user: ${user.name}`);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -509,7 +532,7 @@ app.post('/api/auth/login', async (req, res) => {
       { expiresIn: JWT_EXPIRY }
     );
 
-    console.log(`[AUTH] User logged in: ${user.phone} (${user.role})`);
+    console.log(`[AUTH] User logged in successfully: ${user.phone} (${user.role})`);
 
     res.json({
       success: true,
@@ -523,8 +546,9 @@ app.post('/api/auth/login', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('[AUTH] Login error:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('[AUTH] Login error:', error);
+    console.error('[AUTH] Error stack:', error.stack);
+    res.status(500).json({ error: error.message || 'Server error during authentication' });
   }
 });
 
