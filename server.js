@@ -19,7 +19,8 @@ const SMTP_HOST = process.env.SMTP_HOST;
 const SMTP_PORT = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : undefined;
 const SMTP_USER = process.env.SMTP_USER;
 const SMTP_PASS = process.env.SMTP_PASS;
-const FROM_EMAIL = process.env.FROM_EMAIL || SMTP_USER || process.env.ADMIN_EMAIL;
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'emouisaac1@gmail.com';
+const FROM_EMAIL = process.env.FROM_EMAIL || SMTP_USER || ADMIN_EMAIL;
 
 let mailTransporter = null;
 if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
@@ -41,11 +42,19 @@ if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
   }
 } else {
   console.log('[EMAIL] SMTP not configured - admin notifications will be skipped');
+  console.log('[EMAIL] Missing:', {
+    SMTP_HOST: !SMTP_HOST ? 'NOT SET' : 'SET',
+    SMTP_USER: !SMTP_USER ? 'NOT SET' : 'SET',
+    SMTP_PASS: !SMTP_PASS ? 'NOT SET' : 'SET'
+  });
 }
 
 console.log(`[STARTUP] PORT: ${PORT}`);
 console.log(`[STARTUP] Google Maps API Key: ${GOOGLE_MAPS_API_KEY ? 'LOADED' : 'MISSING'}`);
 console.log(`[STARTUP] MongoDB URI: ${MONGODB_URI}`);
+console.log(`[STARTUP] EMAIL/SMTP: ${mailTransporter ? 'CONFIGURED' : 'NOT CONFIGURED'}`);
+console.log(`[STARTUP] ADMIN_EMAIL: ${process.env.ADMIN_EMAIL || 'NOT SET'}`);
+console.log(`[STARTUP] FROM_EMAIL: ${FROM_EMAIL || 'NOT SET'}`);
 
 // Middleware
 app.use(express.json());
@@ -172,7 +181,6 @@ async function sendAdminNotification(booking) {
       return;
     }
 
-    const adminEmail = process.env.ADMIN_EMAIL || 'emouisaac1@gmail.com';
     const subject = `New booking: ${booking.name} — ${booking.pickup} → ${booking.destination}`;
     const text = `A new booking was created:\n\nID: ${booking._id}\nName: ${booking.name}\nPhone: ${booking.phone}\nPickup: ${booking.pickup}\nDestination: ${booking.destination}\nDate: ${booking.date || 'N/A'}\nTime: ${booking.time || 'N/A'}\nEstimated Price: ${booking.estimatedPrice || 'N/A'}\nNotes: ${booking.notes || ''}\n\nView in admin panel when available.`;
     const html = `<h2>New Booking</h2>
@@ -189,14 +197,14 @@ async function sendAdminNotification(booking) {
       <p>This is an automated notification from your Teleka server.</p>`;
 
     const mailOptions = {
-      from: FROM_EMAIL || `Teleka <${adminEmail}>`,
-      to: adminEmail,
+      from: FROM_EMAIL,
+      to: ADMIN_EMAIL,
       subject,
       text,
       html
     };
 
-    console.log(`[EMAIL] Sending notification to ${adminEmail}...`);
+    console.log(`[EMAIL] Sending notification to ${ADMIN_EMAIL}...`);
     const info = await mailTransporter.sendMail(mailOptions);
     console.log('[EMAIL] Admin notification sent successfully:', info && (info.messageId || info.response));
   } catch (err) {
@@ -963,7 +971,7 @@ app.post('/api/debug/test-email', async (req, res) => {
       smtp_user: SMTP_USER ? '***' : 'NOT_SET',
       smtp_pass: SMTP_PASS ? '***' : 'NOT_SET',
       from_email: FROM_EMAIL || 'NOT_SET',
-      admin_email: process.env.ADMIN_EMAIL || 'NOT_SET',
+      admin_email: ADMIN_EMAIL || 'NOT_SET',
       transporter_ready: !!mailTransporter
     };
 
@@ -971,10 +979,9 @@ app.post('/api/debug/test-email', async (req, res) => {
       return res.status(400).json({ error: 'Email transporter not configured', config });
     }
 
-    const adminEmail = process.env.ADMIN_EMAIL || 'emouisaac1@gmail.com';
     const testInfo = await mailTransporter.sendMail({
-      from: FROM_EMAIL || `Teleka <${adminEmail}>`,
-      to: adminEmail,
+      from: FROM_EMAIL,
+      to: ADMIN_EMAIL,
       subject: '[TEST] Teleka Email Configuration Test',
       text: 'This is a test email to verify SMTP configuration is working on Render.',
       html: '<h3>Test Email</h3><p>SMTP configuration is working correctly.</p>'
@@ -990,7 +997,7 @@ app.post('/api/debug/test-email', async (req, res) => {
         smtp_port: SMTP_PORT || 'NOT_SET',
         smtp_user: SMTP_USER ? '***' : 'NOT_SET',
         from_email: FROM_EMAIL || 'NOT_SET',
-        admin_email: process.env.ADMIN_EMAIL || 'NOT_SET',
+        admin_email: ADMIN_EMAIL || 'NOT_SET',
         transporter_ready: !!mailTransporter
       }
     });
