@@ -1,0 +1,16 @@
+{
+  "pickup": "Bukoto",
+  "destination": "Kampala CBD",
+  "pickupLat": "0.350",
+  "pickupLng": "32.590",
+  "destLat": "0.315",
+  "destLng": "32.582",
+  "priceRange": {"lower": 5000, "upper": 7000},
+  "clientName": "Test User",
+  "clientPhone": "2567123456",
+  "notes": "Test booking",
+  "serviceType": "standard",
+  "date": "2025-12-05",
+  "time": "10:00",
+  "estimatedPrice": "6000"
+}
