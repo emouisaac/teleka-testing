@@ -2190,6 +2190,45 @@
             // Initial badge update and periodic refresh
             updateNavRideBadge();
             setInterval(updateNavRideBadge, 30000);
+            
+            // === Real-time updates via Server-Sent Events ===
+            try {
+                if (!!window.EventSource) {
+                    const es = new EventSource('/sse/bookings');
+                    es.addEventListener('booking_confirmed', (ev) => {
+                        try {
+                            const data = JSON.parse(ev.data);
+                            console.log('SSE booking_confirmed', data);
+                            // If the confirmed booking belongs to the logged-in user, refresh ride list
+                            (async () => {
+                                await updateNavRideBadge();
+                                // If ride-status is visible, refresh its content
+                                if (rideClicked || document.getElementById('ride-status')?.style.display !== 'none') {
+                                    openRideStatus();
+                                }
+                            })();
+                        } catch (e) { console.error('SSE parse error', e); }
+                    });
+
+                    es.addEventListener('booking_updated', (ev) => {
+                        try {
+                            const data = JSON.parse(ev.data);
+                            console.log('SSE booking_updated', data);
+                            updateNavRideBadge();
+                            if (rideClicked || document.getElementById('ride-status')?.style.display !== 'none') {
+                                openRideStatus();
+                            }
+                        } catch (e) { console.error('SSE parse error', e); }
+                    });
+
+                    es.addEventListener('booking_created', (ev) => {
+                        try { console.log('SSE booking_created'); updateNavRideBadge(); } catch(e){}
+                    });
+
+                    es.onerror = function(err) { console.warn('SSE connection error', err); };
+                    window.__bookingEventSource = es;
+                }
+            } catch (e) { console.error('SSE init error', e); }
             // which fetches from /api/calculate-price endpoint on server
         });
     </script>

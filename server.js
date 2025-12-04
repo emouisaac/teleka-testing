@@ -1,34 +1,101 @@
 const express = require('express');
 const path = require('path');
+const mongoose = require('mongoose');
+const bcryptjs = require('bcryptjs');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/teleka';
 
 console.log(`[STARTUP] PORT: ${PORT}`);
 console.log(`[STARTUP] Google Maps API Key: ${GOOGLE_MAPS_API_KEY ? 'LOADED' : 'MISSING'}`);
+console.log(`[STARTUP] MongoDB URI: ${MONGODB_URI}`);
 
 // Middleware
 app.use(express.json());
 
-// In-memory bookings storage (in production, use a database)
-const bookings = [];
-let bookingIdCounter = 1000;
+// ============ MongoDB Connection ============
+mongoose.connect(MONGODB_URI)
+  .then(() => {
+    console.log('[DB] Connected to MongoDB');
+  })
+  .catch(err => {
+    console.error('[DB] Failed to connect to MongoDB:', err.message);
+    console.warn('[DB] App will start but database operations will fail. Make sure MongoDB is running.');
+  });
 
-// Mock locations database for autocomplete
-const mockLocations = [
-  { description: 'Entebbe International Airport', place_id: 'entebbe_airport', lat: -0.1022, lng: 32.4428 },
-  { description: 'Kampala City Centre', place_id: 'kampala_center', lat: -0.3155, lng: 32.5832 },
-  { description: 'Makerere University', place_id: 'makerere_uni', lat: -0.3389, lng: 32.5733 },
-  { description: 'Mulago Hospital', place_id: 'mulago_hospital', lat: -0.3256, lng: 32.5763 },
-  { description: 'Kampala Road', place_id: 'kampala_road', lat: -0.3201, lng: 32.5861 },
-  { description: 'Nairobi Road', place_id: 'nairobi_road', lat: -0.3156, lng: 32.5831 },
-  { description: 'Jinja Road', place_id: 'jinja_road', lat: -0.3145, lng: 32.6201 },
-  { description: 'Old Kampala', place_id: 'old_kampala', lat: -0.3174, lng: 32.5891 },
-  { description: 'Garden City Mall', place_id: 'garden_city', lat: -0.2976, lng: 32.6007 },
-  { description: 'Bugoloobi', place_id: 'bugoloobi', lat: -0.3323, lng: 32.6131 },
-];
+// ============ Mongoose Schemas ============
+const bookingSchema = new mongoose.Schema({
+  name: String,
+  phone: String,
+  email: String,
+  pickup: { type: String, required: true },
+  destination: { type: String, required: true },
+  pickupLat: Number,
+  pickupLng: Number,
+  destLat: Number,
+  destLng: Number,
+  serviceType: String,
+  date: String,
+  time: String,
+  estimatedPrice: String,
+  notes: String,
+  status: { type: String, default: 'pending', enum: ['pending', 'confirmed', 'completed', 'cancelled'] },
+  driver: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  priceRange: {
+    lower: Number,
+    upper: Number
+  },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+const userSchema = new mongoose.Schema({
+  name: String,
+  phone: { type: String, unique: true, sparse: true },
+  email: { type: String, unique: true, sparse: true },
+  password: String,
+  role: { type: String, enum: ['client', 'driver', 'admin'], default: 'client' },
+  createdAt: { type: Date, default: Date.now }
+});
+
+// Hash password before saving
+userSchema.pre('save', async function(next) {
+  if (!this.isModified('password')) return next();
+  try {
+    const salt = await bcryptjs.genSalt(10);
+    this.password = await bcryptjs.hash(this.password, salt);
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Compare password method
+userSchema.methods.comparePassword = async function(plainPassword) {
+  return await bcryptjs.compare(plainPassword, this.password);
+};
+
+const Booking = mongoose.model('Booking', bookingSchema);
+const User = mongoose.model('User', userSchema);
+
+// Server-Sent Events clients
+const sseClients = [];
+
+function sendSseEvent(event, data) {
+  const payload = `event: ${event}\n` + `data: ${JSON.stringify(data)}\n\n`;
+  sseClients.forEach(res => {
+    try {
+      res.write(payload);
+    } catch (err) {
+      // ignore individual client errors; cleanup happens on close
+    }
+  });
+}
+
+// ============ API Endpoints ============
 
 // API endpoint: place autocomplete
 app.get('/api/places/autocomplete', async (req, res) => {
@@ -111,7 +178,7 @@ app.get('/api/places/details', async (req, res) => {
   }
 });
 
-// API endpoint: calculate price (mock)
+// Calculate price (mock)
 app.get('/api/calculate-price', (req, res) => {
   const origin = req.query.origin || '0,0';
   const destination = req.query.destination || '0,0';
@@ -119,30 +186,29 @@ app.get('/api/calculate-price', (req, res) => {
   const [originLat, originLng] = origin.split(',').map(Number);
   const [destLat, destLng] = destination.split(',').map(Number);
 
-  // Simple distance calculation (Haversine formula approximation)
   const dlat = destLat - originLat;
   const dlng = destLng - originLng;
-  const distanceKm = Math.sqrt(dlat * dlat + dlng * dlng) * 111; // rough approximation
+  const distanceKm = Math.sqrt(dlat * dlat + dlng * dlng) * 111;
 
-  // Mock pricing: base 5000 + 1000 per km
   const baseFare = 5000;
   const perKmRate = 1000;
   const lowPrice = Math.round(baseFare + distanceKm * perKmRate * 0.9);
   const highPrice = Math.round(baseFare + distanceKm * perKmRate * 1.1);
 
   res.json({
-    distance: { value: distanceKm * 1000 }, // in meters
-    duration: { value: Math.max(600, distanceKm * 60) }, // rough estimate in seconds
+    distance: { value: distanceKm * 1000 },
+    duration: { value: Math.max(600, distanceKm * 60) },
     priceRange: {
       lower: lowPrice,
       upper: highPrice
     },
-    isPeakHour: false
+    isPeakHour: false,
+    traffic_level: 'Low'
   });
 });
 
-// API endpoint: create booking
-app.post('/api/bookings', (req, res) => {
+// Create booking
+app.post('/api/bookings', async (req, res) => {
   const { pickup, destination, pickupLat, pickupLng, destLat, destLng, priceRange, clientName, clientPhone, notes, serviceType, date, time, estimatedPrice } = req.body;
   
   console.log(`[BOOKING] New booking from ${clientName} (${clientPhone})`);
@@ -151,106 +217,299 @@ app.post('/api/bookings', (req, res) => {
     return res.status(400).json({ error: 'Missing required booking fields' });
   }
 
-  const booking = {
-    _id: `booking_${bookingIdCounter}`,
-    id: bookingIdCounter++,
-    name: clientName || 'Anonymous',
-    phone: clientPhone || 'N/A',
-    email: clientPhone || 'N/A',
-    timestamp: new Date().toISOString(),
-    createdAt: new Date().toISOString(),
-    status: 'pending', // pending, accepted, in-progress, completed, cancelled
-    pickup: pickup,
-    destination: destination,
-    serviceType: serviceType || '',
-    date: date || '',
-    time: time || '',
-    estimatedPrice: estimatedPrice || '',
-    notes: notes || '',
-    pickupLat: parseFloat(pickupLat),
-    pickupLng: parseFloat(pickupLng),
-    destLat: parseFloat(destLat),
-    destLng: parseFloat(destLng),
-    priceRange: priceRange || { lower: 0, upper: 0 },
-    driver: null // will be assigned when driver accepts
-  };
+  try {
+    const booking = new Booking({
+      name: clientName || 'Anonymous',
+      phone: clientPhone || 'N/A',
+      email: clientPhone || 'N/A',
+      pickup,
+      destination,
+      pickupLat: parseFloat(pickupLat),
+      pickupLng: parseFloat(pickupLng),
+      destLat: parseFloat(destLat),
+      destLng: parseFloat(destLng),
+      serviceType: serviceType || '',
+      date: date || '',
+      time: time || '',
+      estimatedPrice: estimatedPrice || '',
+      notes: notes || '',
+      status: 'pending',
+      priceRange: priceRange || { lower: 0, upper: 0 }
+    });
 
-  bookings.push(booking);
-  console.log(`[BOOKING] Booking ${booking.id} created. Total bookings: ${bookings.length}`);
+    const saved = await booking.save();
+    console.log(`[BOOKING] Booking ${saved._id} created. Status: ${saved.status}`);
 
-  res.json({
-    success: true,
-    bookingId: booking.id,
-    message: 'Booking created successfully'
+    // Broadcast new booking to SSE clients
+    try { sendSseEvent('booking_created', saved.toObject()); } catch (e) { /* ignore */ }
+
+    res.json({
+      success: true,
+      bookingId: saved._id,
+      message: 'Booking created successfully'
+    });
+  } catch (error) {
+    console.error('[BOOKING] Error creating booking:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all bookings (admin)
+app.get('/api/bookings', async (req, res) => {
+  try {
+    const bookings = await Booking.find().sort({ createdAt: -1 });
+    console.log(`[ADMIN] Fetching ${bookings.length} bookings`);
+    
+    res.json(bookings.map(b => ({
+      _id: b._id,
+      id: b._id.toString(),
+      name: b.name,
+      phone: b.phone,
+      pickup: b.pickup,
+      destination: b.destination,
+      date: b.date,
+      time: b.time,
+      serviceType: b.serviceType,
+      status: b.status,
+      estimatedPrice: b.estimatedPrice,
+      createdAt: b.createdAt,
+      priceRange: b.priceRange || { lower: 0, upper: 0 }
+    })));
+  } catch (error) {
+    console.error('[ADMIN] Error fetching bookings:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get single booking
+app.get('/api/bookings/:id', async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+    
+    if (!booking) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+
+    res.json(booking);
+  } catch (error) {
+    console.error('[BOOKING] Error fetching booking:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update booking status (PATCH)
+app.patch('/api/bookings/:id', async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+    
+    if (!booking) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+
+    const { status, driver } = req.body;
+
+    if (status) {
+      booking.status = status;
+      booking.updatedAt = Date.now();
+      console.log(`[BOOKING] Booking ${booking._id} status updated to: ${status}`);
+    }
+
+    if (driver) {
+      booking.driver = driver;
+      console.log(`[BOOKING] Booking ${booking._id} assigned to driver: ${driver}`);
+    }
+
+    const saved = await booking.save();
+    
+    // notify SSE clients about update
+    try { sendSseEvent('booking_updated', saved.toObject()); } catch (e) { /* ignore */ }
+
+    res.json({ success: true, booking: saved });
+  } catch (error) {
+    console.error('[BOOKING] Error updating booking:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Confirm booking (POST /api/bookings/:id/confirm)
+app.post('/api/bookings/:id/confirm', async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+
+    if (!booking) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+
+    booking.status = 'confirmed';
+    booking.updatedAt = Date.now();
+    const saved = await booking.save();
+    
+    console.log(`[BOOKING] Booking ${saved._id} confirmed via /confirm`);
+
+    // broadcast update
+    try { sendSseEvent('booking_confirmed', saved.toObject()); } catch (e) { /* ignore */ }
+
+    res.json(saved);
+  } catch (error) {
+    console.error('[BOOKING] Error confirming booking:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete booking
+app.delete('/api/bookings/:id', async (req, res) => {
+  try {
+    const booking = await Booking.findByIdAndDelete(req.params.id);
+    
+    if (!booking) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+
+    console.log(`[BOOKING] Booking ${booking._id} deleted`);
+    res.json({ success: true, message: 'Booking deleted' });
+  } catch (error) {
+    console.error('[BOOKING] Error deleting booking:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Clear all bookings (for testing/demo only - consider removing in production)
+app.post('/api/bookings/clear-all', async (req, res) => {
+  try {
+    await Booking.deleteMany({});
+    console.log('[BOOKING] All bookings cleared');
+    res.json({ success: true, message: 'All bookings cleared' });
+  } catch (error) {
+    console.error('[BOOKING] Error clearing bookings:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============ Authentication Endpoints ============
+
+// Register
+app.post('/api/auth/register', async (req, res) => {
+  const { name, phone, password } = req.body;
+
+  if (!phone || !password) {
+    return res.status(400).json({ error: 'Phone and password are required' });
+  }
+
+  try {
+    // Check if user already exists
+    let user = await User.findOne({ $or: [{ phone }, { email: phone }] });
+    if (user) {
+      return res.status(400).json({ error: 'User already exists' });
+    }
+
+    // Create new user
+    user = new User({
+      name: name || phone,
+      phone,
+      password,
+      role: 'client'
+    });
+
+    const saved = await user.save();
+    console.log(`[AUTH] New user registered: ${saved.phone}`);
+
+    // Create token (simple JWT-like; for production use jsonwebtoken)
+    const token = Buffer.from(saved._id.toString()).toString('base64');
+
+    res.json({
+      success: true,
+      token,
+      user: {
+        id: saved._id,
+        name: saved.name,
+        phone: saved.phone,
+        role: saved.role
+      },
+      message: 'User registered successfully'
+    });
+  } catch (error) {
+    console.error('[AUTH] Register error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Login
+app.post('/api/auth/login', async (req, res) => {
+  const { identifier, password } = req.body;
+
+  if (!identifier || !password) {
+    return res.status(400).json({ error: 'Identifier and password are required' });
+  }
+
+  try {
+    // Find user by phone or admin id
+    const user = await User.findOne({ $or: [{ phone: identifier }, { name: identifier }] });
+
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Compare password
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Create token (simple base64; for production use jsonwebtoken)
+    const token = Buffer.from(user._id.toString()).toString('base64');
+
+    console.log(`[AUTH] User logged in: ${user.phone} (${user.role})`);
+
+    res.json({
+      success: true,
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        phone: user.phone,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error('[AUTH] Login error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============ SSE Endpoint ============
+
+app.get('/sse/bookings', (req, res) => {
+  // set headers for SSE
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders && res.flushHeaders();
+
+  // send a comment to keep connection alive initially
+  res.write(': connected\n\n');
+
+  sseClients.push(res);
+  console.log('[SSE] Client connected. Total SSE clients:', sseClients.length);
+
+  // on client disconnect, remove from list
+  req.on('close', () => {
+    const idx = sseClients.indexOf(res);
+    if (idx !== -1) sseClients.splice(idx, 1);
+    console.log('[SSE] Client disconnected. Remaining:', sseClients.length);
   });
 });
 
-// API endpoint: get all bookings (for admin dashboard)
-app.get('/api/bookings', (req, res) => {
-  console.log(`[ADMIN] Fetching ${bookings.length} bookings`);
-  // Return bookings array expected by the admin dashboard
-  const response = bookings.map(b => ({
-    _id: b._id,
-    id: b.id,
-    name: b.name,
-    phone: b.phone,
-    pickup: b.pickup,
-    destination: b.destination,
-    date: b.date,
-    time: b.time,
-    serviceType: b.serviceType,
-    status: b.status,
-    estimatedPrice: b.estimatedPrice,
-    createdAt: b.createdAt || b.timestamp || new Date().toISOString(),
-    priceRange: b.priceRange || { lower: 0, upper: 0 }
-  }));
+// ============ Static Files & Routing ============
 
-  res.json(response);
-});
-
-// API endpoint: get single booking
-app.get('/api/bookings/:id', (req, res) => {
-  const booking = bookings.find(b => b.id === parseInt(req.params.id));
-  
-  if (!booking) {
-    return res.status(404).json({ error: 'Booking not found' });
-  }
-
-  res.json(booking);
-});
-
-// API endpoint: update booking status (for admin/driver)
-app.patch('/api/bookings/:id', (req, res) => {
-  const booking = bookings.find(b => b.id === parseInt(req.params.id));
-  
-  if (!booking) {
-    return res.status(404).json({ error: 'Booking not found' });
-  }
-
-  const { status, driver } = req.body;
-
-  if (status) {
-    booking.status = status;
-    console.log(`[BOOKING] Booking ${booking.id} status updated to: ${status}`);
-  }
-
-  if (driver) {
-    booking.driver = driver;
-    console.log(`[BOOKING] Booking ${booking.id} assigned to driver: ${driver.name}`);
-  }
-
-  res.json({ success: true, booking });
-});
-
-// Serve static files AFTER API routes so they don't interfere
+// Serve static files
 app.use(express.static(path.join(__dirname)));
 
-// Ensure the client index is the main page for the root path
+// Root route
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'client', 'index.html'));
 });
 
-// Fallback: when a route isn't found, try to serve client index (useful for client-side routing)
+// Fallback: serve client index for client-side routing
 app.use((req, res, next) => {
   if (req.method === 'GET' && !req.path.startsWith('/api')) {
     return res.sendFile(path.join(__dirname, 'client', 'index.html'));
@@ -258,9 +517,11 @@ app.use((req, res, next) => {
   next();
 });
 
+// ============ Server Start ============
+
 app.listen(PORT, () => {
-  console.log(`Server listening on http://localhost:${PORT}`);
-  console.log(`Client: http://localhost:${PORT}`);
-  console.log(`Admin: http://localhost:${PORT}/admin/`);
-  console.log(`Driver: http://localhost:${PORT}/driver/`);
+  console.log(`\n[SERVER] Listening on http://localhost:${PORT}`);
+  console.log(`[SERVER] Client:  http://localhost:${PORT}`);
+  console.log(`[SERVER] Admin:   http://localhost:${PORT}/admin/`);
+  console.log(`[SERVER] Driver:  http://localhost:${PORT}/driver/\n`);
 });
