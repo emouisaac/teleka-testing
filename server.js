@@ -518,6 +518,53 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// One-time maintenance endpoint: cleanup non-admin users and bookings
+// WARNING: This endpoint is intentionally powerful. Keep it temporary and remove after use.
+// Protect it with a secret: either `ADMIN_PASS` or `MAINTENANCE_SECRET` (env vars).
+app.post('/api/maintenance/cleanup', async (req, res) => {
+  const secret = (req.query.secret || req.headers['x-maintenance-secret'] || '').toString();
+  const allowed = process.env.MAINTENANCE_SECRET || process.env.ADMIN_PASS;
+  if (!secret || !allowed || secret !== allowed) {
+    return res.status(403).json({ error: 'Unauthorized. Provide the maintenance secret.' });
+  }
+
+  try {
+    // Delete all non-admin users
+    const delUsers = await User.deleteMany({ role: { $ne: 'admin' } });
+    // Delete all bookings
+    const delBookings = await Booking.deleteMany({});
+
+    // Ensure admin account exists and uses ADMIN_PASS
+    const adminPass = process.env.ADMIN_PASS || 'Admin7763';
+    const adminEmail = process.env.ADMIN_EMAIL || 'emouisaac1@gmail.com';
+    const adminPhone = process.env.ADMIN_PHONE || '0000000000';
+
+    let admin = await User.findOne({ role: 'admin' });
+    if (!admin) {
+      admin = new User({ name: 'admin', phone: adminPhone, email: adminEmail, password: adminPass, role: 'admin' });
+      await admin.save();
+      console.log('[MAINT] Created new admin user:', adminEmail, adminPhone);
+    } else {
+      // update admin password (will be hashed by pre-save)
+      admin.password = adminPass;
+      admin.email = admin.email || adminEmail;
+      admin.phone = admin.phone || adminPhone;
+      await admin.save();
+      console.log('[MAINT] Updated existing admin credentials.');
+    }
+
+    return res.json({
+      success: true,
+      deletedUsers: delUsers.deletedCount != null ? delUsers.deletedCount : delUsers.n || 0,
+      deletedBookings: delBookings.deletedCount != null ? delBookings.deletedCount : delBookings.n || 0,
+      admin: { email: admin.email, phone: admin.phone }
+    });
+  } catch (err) {
+    console.error('[MAINT] Cleanup error:', err.stack || err.message || err);
+    return res.status(500).json({ error: (err && err.message) || 'Cleanup failed' });
+  }
+});
+
 // ============ SSE Endpoint ============
 
 app.get('/sse/bookings', (req, res) => {
@@ -559,66 +606,6 @@ app.use((req, res, next) => {
   // Guard: ensure next is a function before calling
   if (typeof next === 'function') return next();
   return res.end();
-});
-
-// ============ Cleanup Endpoint (temporary) ============
-// DELETE all non-admin users and all bookings to fix corrupted data on Render
-// Usage: GET /api/cleanup?key=teleka-reset-key (one-time call)
-// IMPORTANT: Remove this endpoint after using it!
-app.get('/api/cleanup', async (req, res) => {
-  const key = req.query.key || '';
-  if (key !== 'teleka-reset-key') {
-    return res.status(403).json({ error: 'Unauthorized' });
-  }
-
-  try {
-    console.log('[CLEANUP] Starting cleanup...');
-    
-    // Delete all non-admin users
-    const deleteUsersResult = await User.deleteMany({ role: { $ne: 'admin' } });
-    console.log(`[CLEANUP] Deleted ${deleteUsersResult.deletedCount} non-admin users`);
-
-    // Delete all bookings
-    const deleteBookingsResult = await Booking.deleteMany({});
-    console.log(`[CLEANUP] Deleted ${deleteBookingsResult.deletedCount} bookings`);
-
-    // Ensure admin exists with correct password
-    const adminPass = process.env.ADMIN_PASS || 'Admin7763';
-    let admin = await User.findOne({ role: 'admin' });
-    if (!admin) {
-      admin = new User({
-        name: 'Admin',
-        phone: '0000000000',
-        email: 'emouisaac1@gmail.com',
-        password: adminPass,
-        role: 'admin'
-      });
-      await admin.save();
-      console.log('[CLEANUP] Created new admin user');
-    } else {
-      // Update admin password if provided
-      admin.password = adminPass;
-      await admin.save();
-      console.log('[CLEANUP] Updated admin password');
-    }
-
-    res.json({
-      success: true,
-      message: 'Cleanup complete',
-      deleted: {
-        users: deleteUsersResult.deletedCount,
-        bookings: deleteBookingsResult.deletedCount
-      },
-      admin: {
-        email: admin.email,
-        phone: admin.phone,
-        password: 'Check ADMIN_PASS env variable'
-      }
-    });
-  } catch (error) {
-    console.error('[CLEANUP] Error:', error.message);
-    res.status(500).json({ error: 'Cleanup failed: ' + error.message });
-  }
 });
 
 // ============ Server Start ============
