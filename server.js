@@ -167,7 +167,8 @@ function sendSseEvent(event, data) {
 async function sendAdminNotification(booking) {
   try {
     if (!mailTransporter) {
-      console.log('[EMAIL] Skipping admin notification — no transporter');
+      console.log('[EMAIL] Skipping admin notification — no transporter configured');
+      console.log('[EMAIL] To enable: set SMTP_HOST, SMTP_USER, SMTP_PASS env vars');
       return;
     }
 
@@ -195,10 +196,12 @@ async function sendAdminNotification(booking) {
       html
     };
 
+    console.log(`[EMAIL] Sending notification to ${adminEmail}...`);
     const info = await mailTransporter.sendMail(mailOptions);
-    console.log('[EMAIL] Admin notification sent:', info && (info.messageId || info.response) );
+    console.log('[EMAIL] Admin notification sent successfully:', info && (info.messageId || info.response));
   } catch (err) {
-    console.error('[EMAIL] Error sending admin notification:', err && err.message);
+    console.error('[EMAIL] ERROR sending admin notification:', err && err.message ? err.message : err);
+    console.error('[EMAIL] Stack:', err && err.stack ? err.stack : '');
   }
 }
 
@@ -944,6 +947,53 @@ app.get('/api/debug/user', async (req, res) => {
   } catch (err) {
     console.error('[DEBUG-USER] Error:', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Debug endpoint: test email configuration and send test email
+app.post('/api/debug/test-email', async (req, res) => {
+  const secret = (req.query.secret || req.headers['x-admin-secret'] || '').toString();
+  const allowed = process.env.MAINTENANCE_SECRET || process.env.ADMIN_PASS;
+  if (!secret || !allowed || secret !== allowed) return res.status(403).json({ error: 'Unauthorized' });
+
+  try {
+    const config = {
+      smtp_host: SMTP_HOST || 'NOT_SET',
+      smtp_port: SMTP_PORT || 'NOT_SET',
+      smtp_user: SMTP_USER ? '***' : 'NOT_SET',
+      smtp_pass: SMTP_PASS ? '***' : 'NOT_SET',
+      from_email: FROM_EMAIL || 'NOT_SET',
+      admin_email: process.env.ADMIN_EMAIL || 'NOT_SET',
+      transporter_ready: !!mailTransporter
+    };
+
+    if (!mailTransporter) {
+      return res.status(400).json({ error: 'Email transporter not configured', config });
+    }
+
+    const adminEmail = process.env.ADMIN_EMAIL || 'emouisaac1@gmail.com';
+    const testInfo = await mailTransporter.sendMail({
+      from: FROM_EMAIL || `Teleka <${adminEmail}>`,
+      to: adminEmail,
+      subject: '[TEST] Teleka Email Configuration Test',
+      text: 'This is a test email to verify SMTP configuration is working on Render.',
+      html: '<h3>Test Email</h3><p>SMTP configuration is working correctly.</p>'
+    });
+
+    res.json({ success: true, message: 'Test email sent', messageId: testInfo.messageId, config });
+  } catch (err) {
+    console.error('[DEBUG-EMAIL] Test email error:', err && err.message);
+    res.status(500).json({ 
+      error: err && err.message ? err.message : 'Email send failed',
+      config: {
+        smtp_host: SMTP_HOST || 'NOT_SET',
+        smtp_port: SMTP_PORT || 'NOT_SET',
+        smtp_user: SMTP_USER ? '***' : 'NOT_SET',
+        from_email: FROM_EMAIL || 'NOT_SET',
+        admin_email: process.env.ADMIN_EMAIL || 'NOT_SET',
+        transporter_ready: !!mailTransporter
+      }
+    });
   }
 });
 
