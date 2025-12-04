@@ -39,8 +39,13 @@ app.use((req, res, next) => {
 
 // ============ MongoDB Connection ============
 mongoose.connect(MONGODB_URI, {
-  serverSelectionTimeoutMS: 5000,
-  socketTimeoutMS: 45000
+  serverSelectionTimeoutMS: 15000,
+  socketTimeoutMS: 50000,
+  connectTimeoutMS: 15000,
+  bufferCommands: false,
+  maxPoolSize: 10,
+  minPoolSize: 2,
+  retryWrites: false
 })
   .then(() => {
     console.log('[DB] Connected to MongoDB successfully');
@@ -571,9 +576,16 @@ app.post('/api/bookings', async (req, res) => {
   const { pickup, destination, pickupLat, pickupLng, destLat, destLng, priceRange, clientName, clientPhone, notes, serviceType, date, time, estimatedPrice } = req.body;
   
   console.log(`[BOOKING] New booking from ${clientName} (${clientPhone})`);
+  console.log(`[BOOKING] MongoDB connection state: ${mongoose.connection.readyState} (0=disconnected, 1=connected, 2=connecting, 3=disconnecting)`);
 
   if (!pickup || !destination || !pickupLat || !pickupLng || !destLat || !destLng) {
     return res.status(400).json({ error: 'Missing required booking fields' });
+  }
+
+  // Check DB connection before attempting save
+  if (mongoose.connection.readyState !== 1) {
+    console.error('[BOOKING] MongoDB not ready (state:', mongoose.connection.readyState, ')');
+    return res.status(503).json({ error: 'Database connection unavailable. Please try again.' });
   }
 
   try {
@@ -618,7 +630,17 @@ app.post('/api/bookings', async (req, res) => {
     });
   } catch (error) {
     console.error('[BOOKING] Error creating booking:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('[BOOKING] Error stack:', error.stack);
+    
+    // Provide helpful client error message based on error type
+    let clientMessage = 'Sorry, there was an error submitting your booking. Please try again.';
+    if (error.message && error.message.includes('buffering timed out')) {
+      clientMessage = 'Database connection is slow. Please refresh and try again.';
+    } else if (error.code === 'ECONNREFUSED') {
+      clientMessage = 'Connection error. Please check your internet and try again.';
+    }
+    
+    res.status(500).json({ error: clientMessage, detail: error.message });
   }
 });
 
