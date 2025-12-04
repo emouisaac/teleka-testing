@@ -137,10 +137,21 @@ function sendSseEvent(event, data) {
 // Health check endpoint
 app.get('/health', async (req, res) => {
   const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+  
+  // Try to find admin user
+  let adminExists = false;
+  try {
+    const admin = await User.findOne({ role: 'admin' });
+    adminExists = !!admin;
+  } catch (err) {
+    console.error('[HEALTH] Error checking admin:', err.message);
+  }
+
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     database: dbStatus,
+    adminExists,
     mongodb_uri: MONGODB_URI.includes('localhost') ? 'localhost' : 'remote'
   });
 });
@@ -493,33 +504,41 @@ app.post('/api/auth/register', async (req, res) => {
 // Login
 app.post('/api/auth/login', async (req, res) => {
   const { identifier, password } = req.body;
+  
+  // Trim whitespace from inputs
+  const trimmedIdentifier = (identifier || '').trim();
+  const trimmedPassword = (password || '').trim();
 
-  console.log(`[AUTH] Login attempt with identifier: ${identifier}`);
+  console.log(`[AUTH] Login attempt with identifier: "${trimmedIdentifier}"`);
 
-  if (!identifier || !password) {
-    console.log('[AUTH] Missing identifier or password');
+  if (!trimmedIdentifier || !trimmedPassword) {
+    console.log('[AUTH] Missing identifier or password after trimming');
     return res.status(400).json({ error: 'Identifier and password are required' });
   }
 
   try {
     // Find user by phone, email, or name (admin id)
+    // Use regex for case-insensitive name matching
     const user = await User.findOne({ 
       $or: [
-        { phone: identifier }, 
-        { email: identifier },
-        { name: identifier }
+        { phone: trimmedIdentifier }, 
+        { email: trimmedIdentifier },
+        { name: { $regex: `^${trimmedIdentifier}$`, $options: 'i' } }
       ] 
     });
 
     if (!user) {
-      console.log(`[AUTH] User not found for identifier: ${identifier}`);
+      console.log(`[AUTH] User not found for identifier: "${trimmedIdentifier}"`);
+      // List all users for debugging (remove in production)
+      const allUsers = await User.find({}, { name: 1, phone: 1, email: 1, role: 1 });
+      console.log('[AUTH] Available users:', allUsers.map(u => ({ name: u.name, phone: u.phone, email: u.email, role: u.role })));
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     console.log(`[AUTH] User found: ${user.name} (${user.role}), comparing password...`);
 
     // Compare password
-    const isMatch = await user.comparePassword(password);
+    const isMatch = await user.comparePassword(trimmedPassword);
     if (!isMatch) {
       console.log(`[AUTH] Password mismatch for user: ${user.name}`);
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -552,6 +571,40 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// Ensure admin user exists on startup
+async function ensureAdminExists() {
+  try {
+    const adminPass = process.env.ADMIN_PASS || 'Admin7763';
+    const adminEmail = process.env.ADMIN_EMAIL || 'emouisaac1@gmail.com';
+    const adminPhone = process.env.ADMIN_PHONE || '2567XXXXXXX';
+    const adminName = process.env.ADMIN_NAME || 'admin';
+
+    let admin = await User.findOne({ role: 'admin' });
+    
+    if (!admin) {
+      console.log('[STARTUP] Creating admin user...');
+      admin = new User({
+        name: adminName,
+        phone: adminPhone,
+        email: adminEmail,
+        password: adminPass,
+        role: 'admin'
+      });
+      await admin.save();
+      console.log('[STARTUP] Admin user created:', { email: adminEmail, phone: adminPhone, name: adminName });
+    } else {
+      console.log('[STARTUP] Admin user already exists:', { email: admin.email, phone: admin.phone, name: admin.name });
+    }
+  } catch (err) {
+    console.error('[STARTUP] Error ensuring admin exists:', err.message);
+  }
+}
+
+// Call this after database connection is established
+mongoose.connection.on('connected', () => {
+  setTimeout(ensureAdminExists, 1000);
+});
+
 // One-time maintenance endpoint: cleanup non-admin users and bookings
 // WARNING: This endpoint is intentionally powerful. Keep it temporary and remove after use.
 // Protect it with a secret: either `ADMIN_PASS` or `MAINTENANCE_SECRET` (env vars).
@@ -571,11 +624,12 @@ app.post('/api/maintenance/cleanup', async (req, res) => {
     // Ensure admin account exists and uses ADMIN_PASS
     const adminPass = process.env.ADMIN_PASS || 'Admin7763';
     const adminEmail = process.env.ADMIN_EMAIL || 'emouisaac1@gmail.com';
-    const adminPhone = process.env.ADMIN_PHONE || '0000000000';
+    const adminPhone = process.env.ADMIN_PHONE || '2567XXXXXXX';
+    const adminName = process.env.ADMIN_NAME || 'admin';
 
     let admin = await User.findOne({ role: 'admin' });
     if (!admin) {
-      admin = new User({ name: 'admin', phone: adminPhone, email: adminEmail, password: adminPass, role: 'admin' });
+      admin = new User({ name: adminName, phone: adminPhone, email: adminEmail, password: adminPass, role: 'admin' });
       await admin.save();
       console.log('[MAINT] Created new admin user:', adminEmail, adminPhone);
     } else {
@@ -583,6 +637,7 @@ app.post('/api/maintenance/cleanup', async (req, res) => {
       admin.password = adminPass;
       admin.email = admin.email || adminEmail;
       admin.phone = admin.phone || adminPhone;
+      admin.name = admin.name || adminName;
       await admin.save();
       console.log('[MAINT] Updated existing admin credentials.');
     }
@@ -591,11 +646,42 @@ app.post('/api/maintenance/cleanup', async (req, res) => {
       success: true,
       deletedUsers: delUsers.deletedCount != null ? delUsers.deletedCount : delUsers.n || 0,
       deletedBookings: delBookings.deletedCount != null ? delBookings.deletedCount : delBookings.n || 0,
-      admin: { email: admin.email, phone: admin.phone }
+      admin: { email: admin.email, phone: admin.phone, name: admin.name }
     });
   } catch (err) {
     console.error('[MAINT] Cleanup error:', err.stack || err.message || err);
     return res.status(500).json({ error: (err && err.message) || 'Cleanup failed' });
+  }
+});
+
+// Debug endpoint: Get admin user info (protected by secret)
+app.get('/api/admin/info', async (req, res) => {
+  const secret = (req.query.secret || req.headers['x-admin-secret'] || '').toString();
+  const allowed = process.env.MAINTENANCE_SECRET || process.env.ADMIN_PASS;
+  
+  if (!secret || !allowed || secret !== allowed) {
+    return res.status(403).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const admin = await User.findOne({ role: 'admin' });
+    if (!admin) {
+      return res.status(404).json({ error: 'No admin user found' });
+    }
+
+    res.json({
+      admin: {
+        id: admin._id,
+        name: admin.name,
+        phone: admin.phone,
+        email: admin.email,
+        role: admin.role,
+        createdAt: admin.createdAt
+      }
+    });
+  } catch (err) {
+    console.error('[ADMIN-INFO] Error:', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
