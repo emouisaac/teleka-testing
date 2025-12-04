@@ -647,7 +647,7 @@
                         </a>
                     </li>
                     <li>
-                        <a href="../" style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 20px;">
+                            <a href="../client/" style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 20px;">
                             <i class="fas fa-arrow-left"></i>
                             <span>Back to Site</span>
                         </a>
@@ -670,7 +670,7 @@
                         <i class="fas fa-trash"></i>
                         Clear All
                     </button>
-                    <button class="btn" id="enableSoundBtn" title="Enable sound notifications">🔔</button>
+                    
                     <button type="button" class="btn btn-outline" id="loginBtn">Login</button>
                 </div>
             </div>
@@ -775,39 +775,8 @@
         </div>
     </div>
 
-    <script>
-        window.onNativePush = function(payload) {
-          // Show system notification if supported and permitted
-          if ('Notification' in window && Notification.permission === 'granted') {
-            new Notification(payload.title || 'Notification', {
-              body: payload.body || '',
-              icon: '/ims/1110.png',
-              requireInteraction: true
-            });
-          } else {
-            alert('New notification: ' + (payload.title || 'Notification'));
-          }
-
-          // Play a simple ringtone (web audio)
-          try {
-            var ctx = window.__nativeAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
-            window.__nativeAudioCtx = ctx;
-            if (ctx.state === 'suspended' && ctx.resume) ctx.resume();
-            var o = ctx.createOscillator();
-            var g = ctx.createGain();
-            o.type = 'sine';
-            o.frequency.value = 880;
-            g.gain.value = 0.5;
-            o.connect(g);
-            g.connect(ctx.destination);
-            o.start();
-            o.stop(ctx.currentTime + 0.4);
-          } catch (e) {
-            // If audio fails, ignore
-          }
-        };
-
-        let allBookings = [];
+        <script>
+                let allBookings = [];
         let currentDetailId = null;
         let currentFilter = null; // null | 'pending' | 'confirmed' | 'completed'
 
@@ -822,34 +791,6 @@
                 const newLatest = bookingsArr.reduce((m, b) => {
                     const t = Date.parse(b.createdAt || 0) || 0; return Math.max(m, t);
                 }, 0);
-                // if we have seen bookings before and there's a newer booking, trigger ringtone + system notification
-                if (prevLatest && newLatest > prevLatest) {
-                    try {
-                        const soundOn = localStorage.getItem('soundEnabled') !== 'false';
-                        if (soundOn) {
-                            // play ringtone (audio must have been unlocked via a user gesture earlier)
-                            try{
-                                // play immediately and then repeat until acknowledged or focus
-                                playRingtone();
-                                startRepeatingRingtone(6, 2000);
-                            }catch(e){}
-                        }
-
-                        // show a system notification for the newest booking when available
-                        try{
-                            // find the newest booking(s)
-                            const newestBookings = bookingsArr.filter(b => {
-                                const t = Date.parse(b.createdAt || 0) || 0; return t === newLatest;
-                            });
-                            const b = newestBookings[0] || bookingsArr.find(bk => (Date.parse(bk.createdAt||0) || 0) === newLatest) || bookingsArr[0];
-                            if(b){
-                                const title = 'New Booking Received';
-                                const body = `${b.name || 'Customer'} — ${b.pickup} → ${b.destination}`;
-                                showSystemNotification(title, body);
-                            }
-                        }catch(e){ console.warn('notify failed', e); }
-                    } catch(e){}
-                }
                 window.__lastBookingTime = newLatest;
                 allBookings = bookingsArr;
                 // apply status filter if active
@@ -1135,79 +1076,7 @@
             if (exportBtn) exportBtn.addEventListener('click', exportBookings);
             if (clearBtn) clearBtn.addEventListener('click', clearAllBookings);
             // wire enable sound button (default ON unless manually turned off)
-            const enableSoundBtn = document.getElementById('enableSoundBtn');
-            function updateEnableSoundUI(){
-                try{
-                    if(!enableSoundBtn) return;
-                    const on = localStorage.getItem('soundEnabled') !== 'false'; // default true
-                    enableSoundBtn.textContent = on ? '🔔 On' : '🔔 Off';
-                    enableSoundBtn.classList.toggle('btn-success', on);
-                }catch(e){}
-            }
-            if (enableSoundBtn) {
-                // ensure default is ON
-                if(localStorage.getItem('soundEnabled') === null) localStorage.setItem('soundEnabled', 'true');
-
-                enableSoundBtn.addEventListener('click', async function(){
-                    try{
-                        // toggle preference
-                        const currentlyOn = localStorage.getItem('soundEnabled') !== 'false';
-                        const newVal = !currentlyOn;
-                        localStorage.setItem('soundEnabled', newVal ? 'true' : 'false');
-                        updateEnableSoundUI();
-
-                        // If turning on, try to unlock audio and request notification permission
-                        if(newVal){
-                            unlockAudio();
-                            try{
-                                if('Notification' in window && Notification.permission === 'default'){
-                                    await Notification.requestPermission();
-                                }
-                            }catch(e){ console.warn('Notification permission request failed', e); }
-                        }
-                    }catch(e){ console.warn('enableSound failed', e); }
-                });
-
-                // attempt to unlock audio on first user gesture if preference is on
-                const tryAutoUnlock = () => {
-                    try{
-                        if(localStorage.getItem('soundEnabled') !== 'false') unlockAudio();
-                    }catch(e){}
-                    document.removeEventListener('pointerdown', tryAutoUnlock);
-                };
-                document.addEventListener('pointerdown', tryAutoUnlock, { once: true });
-
-                updateEnableSoundUI();
-            }
-                // Register service worker and subscribe admin for push notifications
-                (async function(){
-                    try{
-                        if(!('serviceWorker' in navigator)) return;
-                        const reg = await navigator.serviceWorker.register('/sw.js');
-                        const resp = await fetch('/api/push/vapidPublicKey');
-                        const j = await resp.json();
-                        const pub = j.publicKey;
-                        if(!pub) return;
-                        if (Notification.permission === 'default') {
-                            await Notification.requestPermission();
-                        }
-                        if (Notification.permission !== 'granted') return;
-                        function urlBase64ToUint8Array(base64String) {
-                            const padding = '='.repeat((4 - base64String.length % 4) % 4);
-                            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-                            const rawData = window.atob(base64);
-                            const outputArray = new Uint8Array(rawData.length);
-                            for (let i = 0; i < rawData.length; ++i) {
-                                outputArray[i] = rawData.charCodeAt(i);
-                            }
-                            return outputArray;
-                        }
-                        const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(pub) });
-                        // send subscription to server for admin role
-                        await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ subscription: sub, role: 'admin', email: (JSON.parse(localStorage.getItem('authUser')||'null') || {}).email || '' }) });
-                        console.log('[push:admin] subscribed');
-                    }catch(e){ console.warn('[push:admin] subscribe failed', e); }
-                })();
+            
         });
 
         // Format date and time
@@ -1215,218 +1084,14 @@
             return `${date} ${time}`;
         }
 
-        // Audio helpers for incoming booking ringtone
-        function unlockAudio(){
-            try{
-                if(window.__audioCtx) return true;
-                const C = window.AudioContext || window.webkitAudioContext;
-                if(!C) return false;
-                const ctx = new C();
-                // set a modest gain so playback respects device speaker volume but is audible
-                const g = ctx.createGain(); g.gain.value = 0.6; g.connect(ctx.destination);
-                window.__audioCtx = ctx; window.__audioGain = g;
-                // ensure context is resumed if it starts suspended
-                if(ctx.state === 'suspended' && typeof ctx.resume === 'function') ctx.resume();
-                return true;
-            }catch(e){ console.warn('unlockAudio failed', e); return false; }
-        }
-
-        function playRingtone(){
-            try{
-                const C = window.AudioContext || window.webkitAudioContext;
-                let ctx = window.__audioCtx;
-                if(!ctx && C) {
-                    try{ ctx = new C(); const g = ctx.createGain(); g.gain.value = 0.18; g.connect(ctx.destination); window.__audioCtx = ctx; window.__audioGain = g; }catch(e){}
-                }
-                if(!ctx) return;
-                if(ctx.state === 'suspended' && typeof ctx.resume === 'function') ctx.resume();
-                const now = ctx.currentTime;
-                const freqs = [660, 880, 1100, 880, 660];
-                const globalGain = window.__audioGain || ctx.createGain();
-                // slightly boost the global gain for louder output (still respects device volume)
-                try{ if(globalGain && typeof globalGain.gain !== 'undefined') globalGain.gain.value = Math.max(globalGain.gain.value, 0.75); }catch(e){}
-                // play 5 beeps with a small sub-bass to make it more noticeable
-                freqs.forEach((f, i) => {
-                    const o = ctx.createOscillator();
-                    const g = ctx.createGain();
-                    o.type = 'sine'; o.frequency.value = f;
-                    // envelope to avoid clicks and make tone prominent
-                    const start = now + i * 0.28;
-                    g.gain.setValueAtTime(0, start);
-                    g.gain.linearRampToValueAtTime(1.0, start + 0.03);
-                    g.gain.linearRampToValueAtTime(0.0, start + 0.26);
-                    o.connect(g);
-                    if (globalGain && typeof globalGain.connect === 'function') g.connect(globalGain); else g.connect(ctx.destination);
-                    o.start(start);
-                    o.stop(start + 0.3);
-                });
-                // add a short low-frequency thump for extra presence
-                try{
-                    const o2 = ctx.createOscillator();
-                    const g2 = ctx.createGain();
-                    o2.type = 'sine'; o2.frequency.value = 120;
-                    const s2 = now + 0.08;
-                    g2.gain.setValueAtTime(0, s2);
-                    g2.gain.linearRampToValueAtTime(1.0, s2 + 0.02);
-                    g2.gain.linearRampToValueAtTime(0.0, s2 + 0.28);
-                    o2.connect(g2); g2.connect(globalGain || ctx.destination);
-                    o2.start(s2); o2.stop(s2 + 0.3);
-                }catch(e){}
-            }catch(e){ console.warn('playRingtone failed', e); }
-        }
-
-        // Try to resume audio context when page becomes visible or window gains focus (may still require prior user gesture)
-        try{
-            document.addEventListener('visibilitychange', () => { try{ if(document.visibilityState === 'visible' && window.__audioCtx && window.__audioCtx.state === 'suspended') window.__audioCtx.resume(); }catch(e){} });
-            window.addEventListener('focus', () => { try{ if(window.__audioCtx && window.__audioCtx.state === 'suspended') window.__audioCtx.resume(); }catch(e){} });
-        }catch(e){}
-
-        // helper to manually test ringtone from the console
-        window.testRingtone = function(){
-            try{ if(unlockAudio()) playRingtone(); else console.warn('Audio unlock failed'); }catch(e){ console.warn(e); }
-        };
-
-        // Repeating ringtone controller
-        function startRepeatingRingtone(repeats = 4, interval = 2000) {
-            try{
-                stopRepeatingRingtone();
-                let count = 0;
-                // play first time immediately
-                try{ playRingtone(); }catch(e){}
-                window.__ringerInterval = setInterval(() => {
-                    // stop if window is focused or visible
-                    if(document.visibilityState === 'visible' || document.hasFocus()) { stopRepeatingRingtone(); return; }
-                    if(typeof window.__ringerCount === 'number' && window.__ringerCount >= repeats) { stopRepeatingRingtone(); return; }
-                    try{ playRingtone(); }catch(e){}
-                    window.__ringerCount = (window.__ringerCount || 0) + 1;
-                    if(window.__ringerCount >= repeats) stopRepeatingRingtone();
-                }, interval);
-            }catch(e){ console.warn('startRepeatingRingtone failed', e); }
-        }
-
-        function stopRepeatingRingtone(){
-            try{
-                if(window.__ringerInterval){ clearInterval(window.__ringerInterval); window.__ringerInterval = null; }
-                window.__ringerCount = 0;
-                // close last system notification if any
-                try{ if(window.__lastNotification && typeof window.__lastNotification.close === 'function') window.__lastNotification.close(); }catch(e){}
-            }catch(e){ console.warn('stopRepeatingRingtone failed', e); }
-        }
-
-        // stop ringer when user focuses or interacts
-        window.addEventListener('focus', () => { try{ stopRepeatingRingtone(); if(window.__audioCtx && window.__audioCtx.state === 'suspended') window.__audioCtx.resume(); }catch(e){} });
-        document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') stopRepeatingRingtone(); });
-
-        // Also stop repeating and close system notification when admin acknowledges popup
-        function acknowledgeAdminNotification(){
-            try{ stopRepeatingRingtone(); if(window.__lastNotification && typeof window.__lastNotification.close === 'function') window.__lastNotification.close(); }catch(e){}
-        }
-
-        // System notification helper (uses the Notifications API)
-        function showSystemNotification(title, body){
-            try{
-                if(!('Notification' in window)) return;
-                if(Notification.permission === 'granted'){
-                    // use requireInteraction so notification stays until user dismisses (where supported)
-                    const n = new Notification(title, { body: body, icon: '/ims/1110.png', requireInteraction: true, tag: 'teleka-new-booking' });
-                    // keep reference so we can close it on focus
-                    window.__lastNotification = n;
-                }
-            }catch(e){ console.warn('showSystemNotification failed', e); }
-        }
-
-
         // Close modal when clicking outside
         document.getElementById('detailModal').addEventListener('click', (e) => {
             if (e.target.id === 'detailModal') closeDetailModal();
         });
 
-        // Admin-side EventSource for incoming bookings
-        try{
-            // Open SSE with identifying query params so server can target messages
-            let adminEs;
-            (function(){
-                let adminSseUrl = '/api/notifications/stream?role=admin';
-                try{
-                    const raw = localStorage.getItem('authUser');
-                    const user = raw ? JSON.parse(raw) : null;
-                    if(user && user.email) adminSseUrl += '&email=' + encodeURIComponent(user.email);
-                }catch(e){}
-                adminEs = new EventSource(adminSseUrl);
-            })();
-            adminEs.addEventListener('open', () => console.log('[sse:admin] connected'));
-            adminEs.addEventListener('error', (e) => { /* ignore */ });
+        
 
-            // create admin popup container
-            function createAdminPopup(){
-                if(document.getElementById('adminNotifyPopup')) return;
-                const el = document.createElement('div');
-                el.id = 'adminNotifyPopup';
-                el.style.position = 'fixed';
-                el.style.left = '20px';
-                el.style.bottom = '20px';
-                el.style.zIndex = 99999;
-                el.style.maxWidth = '380px';
-                el.style.background = 'linear-gradient(180deg,#fff,#f8fafc)';
-                el.style.border = '1px solid rgba(0,0,0,0.08)';
-                el.style.boxShadow = '0 10px 30px rgba(2,6,23,0.18)';
-                el.style.borderRadius = '12px';
-                el.style.padding = '14px 16px';
-                el.style.display = 'none';
-                el.style.cursor = 'pointer';
-                el.innerHTML = `<strong id="adminNotifyTitle" style="display:block;margin-bottom:6px;font-size:1rem;color:#0f172a">New Booking</strong><div id="adminNotifyBody" style="font-size:0.95rem;color:#334155"></div>`;
-                el.addEventListener('click', () => { el.style.display = 'none'; stopRepeatingRingtone(); try{ if(window.__lastNotification && typeof window.__lastNotification.close === 'function') window.__lastNotification.close(); }catch(e){} });
-                document.body.appendChild(el);
-            }
-
-            function showAdminPopup(title, body){
-                try{ createAdminPopup(); const el = document.getElementById('adminNotifyPopup'); document.getElementById('adminNotifyTitle').textContent = title; document.getElementById('adminNotifyBody').textContent = body; el.style.display = 'block'; setTimeout(()=>{ try{ el.style.display='none'; }catch(e){} }, 20000); }catch(e){ console.warn('showAdminPopup failed', e); }
-            }
-
-            adminEs.addEventListener('booking-created', (ev) => {
-                try{
-                    const data = JSON.parse(ev.data || '{}');
-                    const b = data.booking || {};
-                    // play sound if enabled
-                    try{ if(localStorage.getItem('soundEnabled') !== 'false'){ unlockAudio(); playRingtone(); startRepeatingRingtone(8, 2500); } }catch(e){}
-                    // show system notification
-                    try{ if('Notification' in window && Notification.permission === 'granted'){ const n = new Notification('New booking received', { body: `${b.name || 'Customer'} — ${b.pickup} → ${b.destination}`, icon: '/ims/1110.png', requireInteraction: true }); window.__lastNotification = n; } }catch(e){}
-                    // show on-page popup and reload bookings list so it appears immediately
-                    showAdminPopup('New booking received', `${b.name || 'Customer'} — ${b.pickup} → ${b.destination}`);
-                    try{ loadBookings(); }catch(e){}
-                }catch(e){ console.warn('[sse:admin] booking-created handler error', e); }
-            });
-
-            adminEs.addEventListener('booking-confirmed', (ev) => {
-                try{
-                    const data = JSON.parse(ev.data || '{}');
-                    const b = data.booking || {};
-                    // admin may want to know when bookings are confirmed too
-                    showAdminPopup('Booking confirmed', `${b.name || 'Customer'} — ${b.pickup} → ${b.destination}`);
-                    try{ loadBookings(); }catch(e){}
-                }catch(e){ console.warn('[sse:admin] booking-confirmed handler error', e); }
-            });
-        }catch(e){ console.warn('Admin EventSource not available', e); }
-
-        // Also handle push messages forwarded from Service Worker when page is open
-        try{
-            if(navigator.serviceWorker && navigator.serviceWorker.addEventListener){
-                navigator.serviceWorker.addEventListener('message', (ev) => {
-                    try{
-                        const msg = ev.data || {};
-                        if(!msg || msg.type !== 'push') return;
-                        const payload = msg.data || {};
-                        const b = payload.booking || payload.data && payload.data.booking;
-                        const title = payload.title || payload.body || 'New booking received';
-                        const body = payload.body || (b ? `${b.name || 'Customer'} — ${b.pickup} → ${b.destination}` : 'You have a new booking');
-                        try{ if(localStorage.getItem('soundEnabled') !== 'false'){ unlockAudio(); playRingtone(); startRepeatingRingtone(8,2500); } }catch(e){}
-                        try{ if('Notification' in window && Notification.permission === 'granted'){ const n = new Notification(title, { body, icon: '/ims/1110.png', requireInteraction: true }); window.__lastNotification = n; } }catch(e){}
-                        showAdminPopup(title, body);
-                        try{ loadBookings(); }catch(e){}
-                    }catch(err){ console.warn('[push:admin] message handler error', err); }
-                });
-            }
-        }catch(e){ console.warn('serviceWorker message listener failed', e); }
+        
 
         // Navigation
         document.querySelectorAll('[data-page]').forEach(link => {

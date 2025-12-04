@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Teleka Taxi | Entebbe International Airport & City Services</title>
-    <link rel="icon" href="ims/1110.png" type="image/x-icon">
+    <link rel="icon" href="../ims/1110.png" type="image/x-icon">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8775748904134067"
      crossorigin="anonymous"></script>
@@ -201,6 +201,29 @@
             transition: var(--transition);
         }
 
+        /* Nav badges for ride status */
+        .nav-badges { margin-left: 8px; display: inline-flex; gap: 6px; vertical-align: middle; }
+        .nav-badge { display:inline-block; min-width:20px; padding:2px 6px; border-radius:12px; font-size:0.72rem; color:#fff; text-align:center; line-height:1; }
+        .nav-badge.pending { background:#ef4444; }
+        .nav-badge.confirmed { background:#10b981; }
+
+        /* Ride Status responsive tweaks */
+        .ride-controls { display:flex; gap:12px; align-items:center; margin-bottom:18px; }
+        #rsItems li { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+        #rsItems li .right { text-align:right; min-width:160px; }
+
+        /* Ensure ride-status has top spacing so its title isn't hidden under fixed header */
+        .ride-status { padding: 120px 0 60px; }
+
+        @media (max-width: 768px) {
+            .ride-controls { flex-direction:column; align-items:stretch; }
+            .ride-controls .btn { width:100%; }
+            #rsItems li { flex-direction:column; align-items:flex-start; }
+            #rsItems li .right { text-align:left; min-width:unset; margin-top:8px; }
+            .nav-badges { margin-left:6px; }
+            .ride-status { padding: 100px 12px 40px; }
+        }
+
         .nav-links a:hover::after {
             width: 100%;
         }
@@ -286,7 +309,7 @@
             min-height: 50px;
             overflow: hidden;
             display: block;
-            background-image: linear-gradient(rgba(0, 0, 0, 0.51), rgba(0, 0, 0, 0.526)), url('/ims/pexels-cottonbro-4606345.jpg');
+            background-image: linear-gradient(rgba(0, 0, 0, 0.51), rgba(0, 0, 0, 0.526)), url('../ims/pexels-cottonbro-4606345.jpg');
             background-size: cover;
             background-repeat: no-repeat;
             background-position: center;
@@ -1025,8 +1048,8 @@
     <!-- Header -->
     <header>
         <div class="container header-container">
-            <a href="#" class="logo">
-                <img src="ims/1110.png" alt="Teleka Taxi" class="logo-icon">
+                <a href="#" class="logo">
+                <img src="../ims/1110.png" alt="Teleka Taxi" class="logo-icon">
                 <span>TelekaTaxi</span>
             </a>
             
@@ -1036,6 +1059,7 @@
                 <a href="#services">Services</a>
                 <a href="#booking">Booking</a>
                 <a href="#features">Features</a>
+                <a href="#ride-status">Ride Status <span class="nav-badges" aria-hidden="true"><span id="navPendingCount" class="nav-badge pending">0</span><span id="navConfirmedCount" class="nav-badge confirmed">0</span></span></a>
                 <a href="#contact">Contact</a>
                 <!-- Mobile-only login link removed (not used) -->
                 <!-- Mobile-only theme toggle (icon-only) -->
@@ -1082,10 +1106,10 @@
             
             <div class="hero-image">
                 <div class="hero-slideshow" aria-hidden="false">
-                    <div class="slide"><img src="ims/customer.jpg" alt="Customer"></div>
-                    <div class="slide"><img src="ims/pexels-cottonbro-4606345.jpg" alt="Taxi on street"></div>
-                    <div class="slide"><img src="ims/pexels-cottonbro-4606402.jpg" alt="Car interior"></div>
-                    <div class="slide"><img src="ims/pexels-ono-kosuki-5647632.jpg" alt="Driver"></div>
+                    <div class="slide"><img src="../ims/customer.jpg" alt="Customer"></div>
+                    <div class="slide"><img src="../ims/pexels-cottonbro-4606345.jpg" alt="Taxi on street"></div>
+                    <div class="slide"><img src="../ims/pexels-cottonbro-4606402.jpg" alt="Car interior"></div>
+                    <div class="slide"><img src="../ims/pexels-ono-kosuki-5647632.jpg" alt="Driver"></div>
                 </div>
             </div>
         </div>
@@ -1170,7 +1194,34 @@
                 </form>
             </div>
             <div class="booking-image">
-                <img src="ims/pexels-cottonbro-4606345.jpg" alt="Taxi Booking">
+                <img src="../ims/pexels-cottonbro-4606345.jpg" alt="Taxi Booking">
+            </div>
+        </div>
+    </section>
+
+    <!-- Ride Status Section (hidden until user clicks 'Ride Status') -->
+    <section class="ride-status" id="ride-status" style="display:none;">
+        <div class="container">
+            <div class="section-title">
+                <h2>Your Ride Status</h2>
+                <p>View your pending, confirmed and completed trips. This view is only shown when you click "Ride Status" in the navigation.</p>
+            </div>
+
+            <div class="ride-controls" style="display:flex; gap:12px; align-items:center; margin-bottom:18px;">
+                <button id="rsPendingBtn" class="btn btn-outline">Pending (<span id="rsPendingCount">0</span>)</button>
+                <button id="rsConfirmedBtn" class="btn">Confirmed (<span id="rsConfirmedCount">0</span>)</button>
+                <button id="rsCompletedBtn" class="btn btn-outline">Completed (<span id="rsCompletedCount">0</span>)</button>
+                <div style="flex:1"></div>
+                <button id="rsRefreshBtn" class="btn btn-secondary">Refresh</button>
+            </div>
+
+            <div id="rideStatusContent">
+                <div id="rsList" style="display:block;">
+                    <!-- items injected here -->
+                    <div id="rsEmptyMessage" style="padding:20px; color:var(--text-light);">No trips found. Book a ride to see it here.</div>
+                    <ul id="rsItems" style="list-style:none; padding:0; margin:0; display:grid; gap:12px;">
+                    </ul>
+                </div>
             </div>
         </div>
     </section>
@@ -1257,7 +1308,7 @@
                         <li><a href="#services">Services</a></li>
                         <li><a href="#booking">Booking</a></li>
                         <li><a href="#features">Features</a></li>
-                        <li><a href="/privacy-policy.html">Privacy Policy</a></li>
+                        <li><a href="../privacy-policy.html">Privacy Policy</a></li>
                         <li><a href="#contact">Contact</a></li>
                     </ul>
                 </div>
@@ -1695,15 +1746,35 @@
             };
 
             try {
+                // Get location data from input elements
+                const pickupInput = document.getElementById('pickup');
+                const destInput = document.getElementById('destination');
+                
+                const pickupLat = pickupInput.dataset.lat;
+                const pickupLng = pickupInput.dataset.lng;
+                const destLat = destInput.dataset.lat;
+                const destLng = destInput.dataset.lng;
+
+                if (!pickupLat || !pickupLng || !destLat || !destLng) {
+                    alert('Please select valid pickup and destination locations from the suggestions.');
+                    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = originalBtnText; }
+                    return;
+                }
+
                 // Send booking to server
                 const estimatedPrice = document.getElementById('priceDisplay')?.innerText || '';
                 const resp = await fetch('/api/bookings', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        name: formData.name,
+                        clientName: formData.name,
+                        clientPhone: authUser?.phone || '',
                         pickup: formData.pickup,
                         destination: formData.destination,
+                        pickupLat,
+                        pickupLng,
+                        destLat,
+                        destLng,
                         serviceType: formData.serviceType,
                         date: formData.date,
                         time: formData.time,
@@ -1717,9 +1788,16 @@
                 }
 
                 const created = await resp.json();
-                alert('Thank you, ' + (created.name || '') + '! Your booking was submitted.');
-                try{ if(window.registerMyBooking && created && created._id) window.registerMyBooking(created._id); }catch(e){}
+                alert('Thank you, ' + formData.name + '! Your booking #' + created.bookingId + ' was submitted. A driver will contact you shortly.');
                 bookingForm.reset();
+                if (window.updateNavRideBadge) window.updateNavRideBadge();
+                
+                // Clear location data
+                pickupInput.dataset.lat = '';
+                pickupInput.dataset.lng = '';
+                destInput.dataset.lat = '';
+                destInput.dataset.lng = '';
+                document.getElementById('priceDisplay').textContent = 'Select pickup and destination locations to see the price';
             } catch (error) {
                 console.error('Booking error:', error);
                 alert('Sorry, there was an error submitting your booking: ' + (error.message || String(error)));
@@ -1728,21 +1806,19 @@
             }
         });
 
-        // Smooth scrolling for anchor links
+        // Smooth scrolling for anchor links (skip '#ride-status' here; handled separately)
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
             anchor.addEventListener('click', function(e) {
-                e.preventDefault();
-                
                 const targetId = this.getAttribute('href');
-                if(targetId === '#') return;
-                
+                if (targetId === '#' || targetId === '#ride-status') return;
+
+                e.preventDefault();
                 const targetElement = document.querySelector(targetId);
                 if(targetElement) {
                     window.scrollTo({
                         top: targetElement.offsetTop - 100,
                         behavior: 'smooth'
                     });
-                    
                     // Do not automatically close mobile nav when a link is clicked; user must use the X button
                 }
             });
@@ -1906,6 +1982,214 @@
             })();
 
             // Price calculation is now handled by BookingForm.calculateDistance()
+
+            // ============ Ride Status (client) ==========
+            const rideStatusLink = document.querySelector('a[href="#ride-status"]');
+            const rideSection = document.getElementById('ride-status');
+            let rideClicked = false; // only show ride section when user explicitly clicks the nav link
+
+            async function fetchUserBookings() {
+                // ensure user is logged in
+                let authUser = null;
+                try { authUser = JSON.parse(localStorage.getItem('authUser') || 'null'); } catch (e) { authUser = null; }
+                if (!authUser) return { error: 'not_authenticated' };
+
+                try {
+                    const resp = await fetch('/api/bookings');
+                    if (!resp.ok) throw new Error('Failed to load bookings');
+                    const bookings = await resp.json();
+                    // filter bookings belonging to this user by phone or name
+                    const phone = authUser.phone || '';
+                    const name = (authUser.name || '').toLowerCase();
+                    const userBookings = bookings.filter(b => {
+                        if (phone && b.phone && b.phone.includes(phone)) return true;
+                        if (name && b.name && b.name.toLowerCase() === name) return true;
+                        return false;
+                    });
+                    return { bookings: userBookings };
+                } catch (err) {
+                    return { error: err.message || String(err) };
+                }
+            }
+
+            function renderRideItems(bookings, statusFilter) {
+                const list = document.getElementById('rsItems');
+                const empty = document.getElementById('rsEmptyMessage');
+                list.innerHTML = '';
+                const filtered = bookings.filter(b => {
+                    const st = (b.status || 'pending').toLowerCase();
+                    if (!statusFilter || statusFilter === 'all') return true;
+                    return st === statusFilter;
+                });
+
+                document.getElementById('rsPendingCount').textContent = bookings.filter(b => (b.status||'pending').toLowerCase()==='pending').length;
+                document.getElementById('rsConfirmedCount').textContent = bookings.filter(b => (b.status||'pending').toLowerCase()==='confirmed').length;
+                document.getElementById('rsCompletedCount').textContent = bookings.filter(b => (b.status||'pending').toLowerCase()==='completed').length;
+
+                if (filtered.length === 0) {
+                    empty.style.display = 'block';
+                    return;
+                }
+
+                empty.style.display = 'none';
+
+                filtered.forEach(b => {
+                    const li = document.createElement('li');
+                    li.style.cssText = 'padding:12px; border:1px solid var(--border); border-radius:8px; background:var(--bg-secondary); display:flex; justify-content:space-between; align-items:center; gap:12px;';
+                    li.innerHTML = `
+                        <div style="flex:1">
+                            <div style="font-weight:700;">${b.name || 'Customer'}</div>
+                            <div style="color:var(--text-light); font-size:0.95rem;">${b.pickup} → ${b.destination}</div>
+                            <div style="color:var(--text-light); font-size:0.85rem; margin-top:6px;">${b.date || ''} ${b.time || ''} • ${b.serviceType || ''}</div>
+                        </div>
+                        <div class="right" style="text-align:right; min-width:160px;">
+                            <div style="font-weight:700; color:var(--primary);">${b.estimatedPrice || formatPriceRange(b.priceRange)}</div>
+                            <div style="margin-top:8px;"><span class="badge badge-${b.status||'pending'}">${(b.status||'Pending')}</span></div>
+                            <div style="margin-top:8px; font-size:0.85rem; color:var(--text-light);">Booked: ${new Date(b.createdAt).toLocaleString()}</div>
+                        </div>
+                    `;
+                    list.appendChild(li);
+                });
+            }
+
+            function formatPriceRange(range) {
+                if (!range) return 'N/A';
+                const lower = range.lower || 0;
+                const upper = range.upper || 0;
+                try {
+                    const f1 = new Intl.NumberFormat('en-UG', { style: 'currency', currency: 'UGX', minimumFractionDigits:0 }).format(lower);
+                    const f2 = new Intl.NumberFormat('en-UG', { style: 'currency', currency: 'UGX', minimumFractionDigits:0 }).format(upper);
+                    return `${f1} - ${f2}`;
+                } catch(e) { return `${lower} - ${upper}`; }
+            }
+
+            async function openRideStatus(defaultFilter) {
+                // ensure logged in
+                let authUser = null;
+                try { authUser = JSON.parse(localStorage.getItem('authUser') || 'null'); } catch(e){authUser=null}
+                if (!authUser) {
+                    // trigger login modal
+                    const loginBtn = document.getElementById('loginBtn');
+                    if (loginBtn) loginBtn.click();
+                    return;
+                }
+
+                // Show section
+                if (rideSection) rideSection.style.display = 'block';
+                // fetch bookings
+                const result = await fetchUserBookings();
+                if (result.error) {
+                    alert('Error loading your rides: ' + result.error);
+                    return;
+                }
+
+                const bookings = result.bookings || [];
+                // default filter: pending
+                const filter = defaultFilter || 'pending';
+                renderRideItems(bookings, filter);
+
+                // wire buttons
+                document.getElementById('rsPendingBtn')?.addEventListener('click', () => renderRideItems(bookings, 'pending'));
+                document.getElementById('rsConfirmedBtn')?.addEventListener('click', () => renderRideItems(bookings, 'confirmed'));
+                document.getElementById('rsCompletedBtn')?.addEventListener('click', () => renderRideItems(bookings, 'completed'));
+                document.getElementById('rsRefreshBtn')?.addEventListener('click', async () => {
+                    const r = await fetchUserBookings();
+                    if (r.error) return alert('Error: ' + r.error);
+                    renderRideItems(r.bookings || [], defaultFilter || 'pending');
+                });
+            }
+            // Update the nav badges with counts for this user
+            async function updateNavRideBadge() {
+                const pendingEl = document.getElementById('navPendingCount');
+                const confirmedEl = document.getElementById('navConfirmedCount');
+                try {
+                    const res = await fetchUserBookings();
+                    if (res.error) {
+                        if (pendingEl) pendingEl.textContent = '0';
+                        if (confirmedEl) confirmedEl.textContent = '0';
+                        return;
+                    }
+                    const b = res.bookings || [];
+                    const pending = b.filter(x => (x.status||'pending').toLowerCase() === 'pending').length;
+                    const confirmed = b.filter(x => (x.status||'pending').toLowerCase() === 'confirmed').length;
+                    if (pendingEl) pendingEl.textContent = pending;
+                    if (confirmedEl) confirmedEl.textContent = confirmed;
+                } catch (e) {
+                    if (pendingEl) pendingEl.textContent = '0';
+                    if (confirmedEl) confirmedEl.textContent = '0';
+                }
+            }
+
+            // expose for other scripts (e.g., after booking submission)
+            window.updateNavRideBadge = updateNavRideBadge;
+
+            if (rideStatusLink) {
+                rideStatusLink.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    rideClicked = true;
+                    openRideStatus('pending');
+                    // scroll to section
+                    setTimeout(() => { document.getElementById('ride-status')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 200);
+                });
+            }
+
+            // When Ride Status is opened we should hide all other major sections
+            function showOnlyRideStatus() {
+                const sections = Array.from(document.querySelectorAll('main, section'));
+                sections.forEach(sec => {
+                    // keep header and footer visible; hide others except ride-status
+                    if (sec.id === 'ride-status') {
+                        sec.style.display = '';
+                    } else {
+                        sec.style.display = 'none';
+                    }
+                });
+                // keep header and footer visible
+                const header = document.querySelector('header'); if (header) header.style.display = '';
+                const footer = document.querySelector('footer'); if (footer) footer.style.display = '';
+            }
+
+            function restoreSections() {
+                const sections = Array.from(document.querySelectorAll('main, section'));
+                sections.forEach(sec => sec.style.display = '');
+                const header = document.querySelector('header'); if (header) header.style.display = '';
+                const footer = document.querySelector('footer'); if (footer) footer.style.display = '';
+            }
+
+            // Call showOnlyRideStatus when opening ride status; restore when user navigates away
+            const originalOpenRide = openRideStatus;
+            openRideStatus = async function(defaultFilter) {
+                await originalOpenRide(defaultFilter);
+                showOnlyRideStatus();
+            };
+
+            // If user navigates to other anchors, restore sections
+            document.querySelectorAll('a[href^="#"]').forEach(a => {
+                a.addEventListener('click', function(e){
+                    const href = this.getAttribute('href');
+                    if (href && href !== '#ride-status') {
+                        // restore layout so other sections are visible
+                        restoreSections();
+                    }
+                });
+            });
+
+            // Prevent the ride-status section from being shown via hash navigation or page load
+            if (location.hash === '#ride-status') {
+                // remove hash so it doesn't auto-open; require explicit click
+                history.replaceState(null, '', location.pathname + location.search);
+            }
+
+            window.addEventListener('hashchange', () => {
+                if (location.hash === '#ride-status' && !rideClicked) {
+                    // user didn't click the nav link — remove the hash and keep section hidden
+                    history.replaceState(null, '', location.pathname + location.search);
+                }
+            });
+
+            // Initial badge update and periodic refresh
+            updateNavRideBadge();
+            setInterval(updateNavRideBadge, 30000);
             // which fetches from /api/calculate-price endpoint on server
         });
     </script>
@@ -2158,208 +2442,6 @@
             })();
         </script>
 
-        <!-- Real-time user notification listener -->
-        <script>
-            (function(){
-                function userUnlockAudio(){
-                    try{
-                        if(window.__userAudioCtx) return true;
-                        const C = window.AudioContext || window.webkitAudioContext;
-                        if(!C) return false;
-                        const ctx = new C();
-                        const g = ctx.createGain(); g.gain.value = 0.5; g.connect(ctx.destination);
-                        window.__userAudioCtx = ctx; window.__userAudioGain = g;
-                        if(ctx.state === 'suspended' && typeof ctx.resume === 'function') ctx.resume();
-                        return true;
-                    }catch(e){ console.warn('userUnlockAudio failed', e); return false; }
-                }
-
-                function userPlayRingtone(){
-                    try{
-                        const C = window.AudioContext || window.webkitAudioContext;
-                        let ctx = window.__userAudioCtx;
-                        if(!ctx && C) { try{ ctx = new C(); const g = ctx.createGain(); g.gain.value = 0.5; g.connect(ctx.destination); window.__userAudioCtx = ctx; window.__userAudioGain = g; }catch(e){} }
-                        if(!ctx) return;
-                        if(ctx.state === 'suspended' && typeof ctx.resume === 'function') ctx.resume();
-                        const now = ctx.currentTime;
-                        const freqs = [880, 660, 880];
-                        const globalGain = window.__userAudioGain || ctx.createGain();
-                        freqs.forEach((f, i) => {
-                            const o = ctx.createOscillator();
-                            const g = ctx.createGain();
-                            o.type = 'sine'; o.frequency.value = f;
-                            const start = now + i * 0.22;
-                            g.gain.setValueAtTime(0, start);
-                            g.gain.linearRampToValueAtTime(0.9, start + 0.02);
-                            g.gain.linearRampToValueAtTime(0.0, start + 0.24);
-                            o.connect(g);
-                            if (globalGain && typeof globalGain.connect === 'function') g.connect(globalGain); else g.connect(ctx.destination);
-                            o.start(start); o.stop(start + 0.26);
-                        });
-                    }catch(e){ console.warn('userPlayRingtone failed', e); }
-                }
-
-                window.testUserRingtone = function(){ if(userUnlockAudio()) userPlayRingtone(); };
-
-                function createUserPopup(){
-                    if(document.getElementById('userNotifyPopup')) return;
-                    const el = document.createElement('div');
-                    el.id = 'userNotifyPopup';
-                    el.style.position = 'fixed';
-                    el.style.right = '20px';
-                    el.style.bottom = '20px';
-                    el.style.zIndex = 99999;
-                    el.style.maxWidth = '320px';
-                    el.style.background = 'linear-gradient(180deg,#fff,#f8fafc)';
-                    el.style.border = '1px solid rgba(0,0,0,0.08)';
-                    el.style.boxShadow = '0 8px 24px rgba(2,6,23,0.16)';
-                    el.style.borderRadius = '12px';
-                    el.style.padding = '12px 14px';
-                    el.style.display = 'none';
-                    el.style.cursor = 'pointer';
-                    el.innerHTML = `<strong id="userNotifyTitle" style="display:block;margin-bottom:6px;font-size:1rem;color:#0f172a">Notification</strong><div id="userNotifyBody" style="font-size:0.95rem;color:#334155"></div>`;
-                    el.addEventListener('click', () => { el.style.display = 'none'; try{ if(window.__lastUserNotification && typeof window.__lastUserNotification.close === 'function') window.__lastUserNotification.close(); }catch(e){} });
-                    document.body.appendChild(el);
-                }
-
-                function showUserPopup(title, body){
-                    try{
-                        createUserPopup();
-                        const el = document.getElementById('userNotifyPopup');
-                        document.getElementById('userNotifyTitle').textContent = title;
-                        document.getElementById('userNotifyBody').textContent = body;
-                        el.style.display = 'block';
-                        setTimeout(() => { try{ el.style.display = 'none'; }catch(e){} }, 20000);
-                    }catch(e){ console.warn('showUserPopup failed', e); }
-                }
-
-                try{
-                    let userSseUrl = '/api/notifications/stream?role=user';
-                    try{ const myBooking = sessionStorage.getItem('myBookingId'); if(myBooking) userSseUrl += '&bookingId=' + encodeURIComponent(myBooking); }catch(e){}
-                    const es = new EventSource(userSseUrl);
-                    es.addEventListener('open', () => console.log('[sse:user] connected'));
-                    es.addEventListener('error', (e) => { /* ignore */ });
-                    es.addEventListener('booking-confirmed', (ev) => {
-                        try{
-                            const data = JSON.parse(ev.data || '{}');
-                            const booking = data.booking || {};
-                            const raw = localStorage.getItem('authUser');
-                            let user = null;
-                            try{ user = raw ? JSON.parse(raw) : null; }catch(e){ user = null; }
-                            const userPhone = user && user.phone ? (user.phone||'') : '';
-                            const bookingPhone = booking.phone || '';
-                            const matches = (user && userPhone && bookingPhone && userPhone === bookingPhone) || false;
-                            const myBookingId = sessionStorage.getItem('myBookingId');
-                            const isMyBooking = myBookingId && booking._id && myBookingId === String(booking._id);
-                            if(matches || isMyBooking){
-                                const title = 'Your booking was confirmed';
-                                const body = `${booking.name || 'Your booking'} — ${booking.pickup} → ${booking.destination}`;
-                                try{ if(userUnlockAudio()) userPlayRingtone(); }catch(e){}
-                                showUserPopup(title, body);
-                                try{ if('Notification' in window && Notification.permission === 'granted'){ const n = new Notification(title, { body, icon: '/ims/1110.png', requireInteraction: true }); window.__lastUserNotification = n; } }catch(e){}
-                            }
-                        }catch(e){ console.warn('[sse:user] booking-confirmed handler error', e); }
-                    });
-                }catch(e){ console.warn('EventSource not available', e); }
-
-                window.registerMyBooking = function(id){ try{ sessionStorage.setItem('myBookingId', String(id)); }catch(e){} };
-            })();
-            // Handle push messages forwarded from Service Worker when page is open
-            try{
-                if(navigator.serviceWorker && navigator.serviceWorker.addEventListener){
-                    navigator.serviceWorker.addEventListener('message', (ev) => {
-                        try{
-                            const msg = ev.data || {};
-                            if(!msg || msg.type !== 'push') return;
-                            const payload = msg.data || {};
-                            const booking = payload.booking || (payload.data && payload.data.booking);
-                            const title = payload.title || payload.body || 'Booking Update';
-                            const body = payload.body || (booking ? `${booking.name || 'Your booking'} — ${booking.pickup} → ${booking.destination}` : 'You have a new notification');
-                            try{ if(userUnlockAudio()) userPlayRingtone(); }catch(e){}
-                            showUserPopup(title, body);
-                            try{ if('Notification' in window && Notification.permission === 'granted'){ const n = new Notification(title, { body, icon: '/ims/1110.png', requireInteraction: true }); window.__lastUserNotification = n; } }catch(e){}
-                        }catch(err){ console.warn('[push:user] message handler error', err); }
-                    });
-                }
-            }catch(e){ console.warn('user serviceWorker message listener failed', e); }
-        </script>
-        <script>
-            // Web Push subscription for users
-            (function(){
-                function urlBase64ToUint8Array(base64String) {
-                    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-                    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-                    const rawData = window.atob(base64);
-                    const outputArray = new Uint8Array(rawData.length);
-                    for (let i = 0; i < rawData.length; ++i) {
-                        outputArray[i] = rawData.charCodeAt(i);
-                    }
-                    return outputArray;
-                }
-
-                async function subscribePushForUser(){
-                    try{
-                        if (!('serviceWorker' in navigator)) return;
-                        const reg = await navigator.serviceWorker.register('/sw.js');
-                        // get VAPID public key
-                        const res = await fetch('/api/push/vapidPublicKey');
-                        const json = await res.json();
-                        const publicKey = json.publicKey;
-                        if(!publicKey) return;
-                        // request notification permission
-                        if (Notification.permission === 'default') {
-                            await Notification.requestPermission();
-                        }
-                        if (Notification.permission !== 'granted') return;
-                        const sub = await reg.pushManager.subscribe({
-                            userVisibleOnly: true,
-                            applicationServerKey: urlBase64ToUint8Array(publicKey)
-                        });
-                        // send subscription to server
-                        await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ subscription: sub, role: 'user' }) });
-                        console.log('[push:user] subscribed');
-                    }catch(e){ console.warn('[push:user] subscribe failed', e); }
-                }
-
-                // Try to subscribe on a user gesture (booking submit or page click)
-                function trySubscribeOnce(){ try{ subscribePushForUser(); document.removeEventListener('pointerdown', trySubscribeOnce); }catch(e){} }
-                document.addEventListener('pointerdown', trySubscribeOnce, { once: true });
-                // also attempt on load (if permissions already granted)
-                window.addEventListener('load', () => { try{ if(Notification.permission === 'granted') subscribePushForUser(); }catch(e){} });
-                window.subscribePushForUser = subscribePushForUser;
-            })();
-        </script>
-        <script>
-window.onNativePush = function(payload) {
-  // Show system notification if supported and permitted
-  if ('Notification' in window && Notification.permission === 'granted') {
-    new Notification(payload.title || 'Notification', {
-      body: payload.body || '',
-      icon: '/ims/1110.png',
-      requireInteraction: true
-    });
-  } else {
-    alert('New notification: ' + (payload.title || 'Notification'));
-  }
-
-  // Play a simple ringtone (web audio)
-  try {
-    var ctx = window.__nativeAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    window.__nativeAudioCtx = ctx;
-    if (ctx.state === 'suspended' && ctx.resume) ctx.resume();
-    var o = ctx.createOscillator();
-    var g = ctx.createGain();
-    o.type = 'sine';
-    o.frequency.value = 880;
-    g.gain.value = 0.5;
-    o.connect(g);
-    g.connect(ctx.destination);
-    o.start();
-    o.stop(ctx.currentTime + 0.4);
-  } catch (e) {
-    // If audio fails, ignore
-  }
-};
-        </script>
+       
 </body>
 </html>
