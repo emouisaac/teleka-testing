@@ -561,6 +561,66 @@ app.use((req, res, next) => {
   return res.end();
 });
 
+// ============ Cleanup Endpoint (temporary) ============
+// DELETE all non-admin users and all bookings to fix corrupted data on Render
+// Usage: GET /api/cleanup?key=teleka-reset-key (one-time call)
+// IMPORTANT: Remove this endpoint after using it!
+app.get('/api/cleanup', async (req, res) => {
+  const key = req.query.key || '';
+  if (key !== 'teleka-reset-key') {
+    return res.status(403).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    console.log('[CLEANUP] Starting cleanup...');
+    
+    // Delete all non-admin users
+    const deleteUsersResult = await User.deleteMany({ role: { $ne: 'admin' } });
+    console.log(`[CLEANUP] Deleted ${deleteUsersResult.deletedCount} non-admin users`);
+
+    // Delete all bookings
+    const deleteBookingsResult = await Booking.deleteMany({});
+    console.log(`[CLEANUP] Deleted ${deleteBookingsResult.deletedCount} bookings`);
+
+    // Ensure admin exists with correct password
+    const adminPass = process.env.ADMIN_PASS || 'Admin7763';
+    let admin = await User.findOne({ role: 'admin' });
+    if (!admin) {
+      admin = new User({
+        name: 'Admin',
+        phone: '0000000000',
+        email: 'emouisaac1@gmail.com',
+        password: adminPass,
+        role: 'admin'
+      });
+      await admin.save();
+      console.log('[CLEANUP] Created new admin user');
+    } else {
+      // Update admin password if provided
+      admin.password = adminPass;
+      await admin.save();
+      console.log('[CLEANUP] Updated admin password');
+    }
+
+    res.json({
+      success: true,
+      message: 'Cleanup complete',
+      deleted: {
+        users: deleteUsersResult.deletedCount,
+        bookings: deleteBookingsResult.deletedCount
+      },
+      admin: {
+        email: admin.email,
+        phone: admin.phone,
+        password: 'Check ADMIN_PASS env variable'
+      }
+    });
+  } catch (error) {
+    console.error('[CLEANUP] Error:', error.message);
+    res.status(500).json({ error: 'Cleanup failed: ' + error.message });
+  }
+});
+
 // ============ Server Start ============
 
 app.listen(PORT, () => {
