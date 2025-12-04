@@ -20,13 +20,19 @@ console.log(`[STARTUP] MongoDB URI: ${MONGODB_URI}`);
 app.use(express.json());
 
 // ============ MongoDB Connection ============
-mongoose.connect(MONGODB_URI)
+mongoose.connect(MONGODB_URI, {
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000
+})
   .then(() => {
-    console.log('[DB] Connected to MongoDB');
+    console.log('[DB] Connected to MongoDB successfully');
+    console.log('[DB] URI:', MONGODB_URI.split('@')[1] || MONGODB_URI.substring(0, 50) + '...');
   })
   .catch(err => {
-    console.error('[DB] Failed to connect to MongoDB:', err.message);
-    console.warn('[DB] App will start but database operations will fail. Make sure MongoDB is running.');
+    console.error('[DB] MongoDB connection failed:', err.message);
+    console.error('[DB] Attempted URI:', MONGODB_URI);
+    console.warn('[DB] App will start but database operations will fail.');
+    console.warn('[DB] Make sure MONGODB_URI is correctly set in your environment.');
   });
 
 // ============ Mongoose Schemas ============
@@ -101,6 +107,17 @@ function sendSseEvent(event, data) {
 }
 
 // ============ API Endpoints ============
+
+// Health check endpoint
+app.get('/health', async (req, res) => {
+  const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    database: dbStatus,
+    mongodb_uri: MONGODB_URI.includes('localhost') ? 'localhost' : 'remote'
+  });
+});
 
 // API endpoint: place autocomplete
 app.get('/api/places/autocomplete', async (req, res) => {
