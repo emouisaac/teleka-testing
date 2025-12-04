@@ -5,6 +5,7 @@ const bcryptjs = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 require('dotenv').config();
+const nodemailer = require('nodemailer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -12,6 +13,35 @@ const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/teleka';
 const JWT_SECRET = process.env.AUTH_SECRET || 'your-default-secret-change-in-production';
 const JWT_EXPIRY = '7d'; // Token valid for 7 days
+
+// Email / SMTP configuration (optional)
+const SMTP_HOST = process.env.SMTP_HOST;
+const SMTP_PORT = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : undefined;
+const SMTP_USER = process.env.SMTP_USER;
+const SMTP_PASS = process.env.SMTP_PASS;
+const FROM_EMAIL = process.env.FROM_EMAIL || SMTP_USER || process.env.ADMIN_EMAIL;
+
+let mailTransporter = null;
+if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
+  try {
+    mailTransporter = nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: SMTP_PORT || 587,
+      secure: SMTP_PORT === 465, // true for 465, false for other ports
+      auth: {
+        user: SMTP_USER,
+        pass: SMTP_PASS
+      }
+    });
+    // Verify connection configuration (non-blocking)
+    mailTransporter.verify().then(() => console.log('[EMAIL] SMTP transporter verified')).catch(err => console.warn('[EMAIL] SMTP verify failed:', err && err.message));
+  } catch (err) {
+    console.error('[EMAIL] Failed to create mail transporter:', err && err.message);
+    mailTransporter = null;
+  }
+} else {
+  console.log('[EMAIL] SMTP not configured - admin notifications will be skipped');
+}
 
 console.log(`[STARTUP] PORT: ${PORT}`);
 console.log(`[STARTUP] Google Maps API Key: ${GOOGLE_MAPS_API_KEY ? 'LOADED' : 'MISSING'}`);
@@ -131,6 +161,45 @@ function sendSseEvent(event, data) {
       // ignore individual client errors; cleanup happens on close
     }
   });
+}
+
+// Send email notification to admin about a new booking
+async function sendAdminNotification(booking) {
+  try {
+    if (!mailTransporter) {
+      console.log('[EMAIL] Skipping admin notification — no transporter');
+      return;
+    }
+
+    const adminEmail = process.env.ADMIN_EMAIL || 'emouisaac1@gmail.com';
+    const subject = `New booking: ${booking.name} — ${booking.pickup} → ${booking.destination}`;
+    const text = `A new booking was created:\n\nID: ${booking._id}\nName: ${booking.name}\nPhone: ${booking.phone}\nPickup: ${booking.pickup}\nDestination: ${booking.destination}\nDate: ${booking.date || 'N/A'}\nTime: ${booking.time || 'N/A'}\nEstimated Price: ${booking.estimatedPrice || 'N/A'}\nNotes: ${booking.notes || ''}\n\nView in admin panel when available.`;
+    const html = `<h2>New Booking</h2>
+      <p><strong>ID:</strong> ${booking._id}</p>
+      <p><strong>Name:</strong> ${booking.name}</p>
+      <p><strong>Phone:</strong> ${booking.phone}</p>
+      <p><strong>Pickup:</strong> ${booking.pickup}</p>
+      <p><strong>Destination:</strong> ${booking.destination}</p>
+      <p><strong>Date:</strong> ${booking.date || 'N/A'}</p>
+      <p><strong>Time:</strong> ${booking.time || 'N/A'}</p>
+      <p><strong>Estimated Price:</strong> ${booking.estimatedPrice || 'N/A'}</p>
+      <p><strong>Notes:</strong> ${booking.notes || ''}</p>
+      <hr/>
+      <p>This is an automated notification from your Teleka server.</p>`;
+
+    const mailOptions = {
+      from: FROM_EMAIL || `Teleka <${adminEmail}>`,
+      to: adminEmail,
+      subject,
+      text,
+      html
+    };
+
+    const info = await mailTransporter.sendMail(mailOptions);
+    console.log('[EMAIL] Admin notification sent:', info && (info.messageId || info.response) );
+  } catch (err) {
+    console.error('[EMAIL] Error sending admin notification:', err && err.message);
+  }
 }
 
 // ============ API Endpoints ============
@@ -302,6 +371,9 @@ app.post('/api/bookings', async (req, res) => {
 
     // Broadcast new booking to SSE clients
     try { sendSseEvent('booking_created', saved.toObject()); } catch (e) { /* ignore */ }
+
+    // Send admin email notification (fire-and-forget)
+    try { sendAdminNotification(saved); } catch (e) { console.error('[BOOKING] sendAdminNotification threw:', e && e.message); }
 
     res.json({
       success: true,
