@@ -665,6 +665,10 @@
             <div class="header">
                 <h1>Admin Dashboard</h1>
                 <div class="header-actions">
+                    <button class="btn btn-secondary" id="soundToggleBtn" title="Toggle notification sound">
+                        <i class="fas fa-volume-up"></i>
+                        <span id="soundLabel">Sound On</span>
+                    </button>
                     <button class="btn btn-secondary" id="exportBtn">
                         <i class="fas fa-download"></i>
                         Export Data
@@ -782,6 +786,136 @@
                 let allBookings = [];
         let currentDetailId = null;
         let currentFilter = null; // null | 'pending' | 'confirmed' | 'completed'
+        let soundEnabled = localStorage.getItem('adminNotificationSound') !== 'off';
+        let lastNotifiedBookingId = null;
+
+        // Notification sound (using Web Audio API to generate a beep)
+        function playNotificationSound() {
+            if (!soundEnabled) return;
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const now = audioContext.currentTime;
+                
+                // Create a short beep sequence
+                for (let i = 0; i < 3; i++) {
+                    const osc = audioContext.createOscillator();
+                    const gain = audioContext.createGain();
+                    osc.connect(gain);
+                    gain.connect(audioContext.destination);
+                    
+                    osc.frequency.value = 800 + i * 200;
+                    gain.gain.setValueAtTime(0.3, now + i * 0.15);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.15 + 0.1);
+                    
+                    osc.start(now + i * 0.15);
+                    osc.stop(now + i * 0.15 + 0.1);
+                }
+            } catch (e) {
+                console.error('Error playing notification sound:', e);
+            }
+        }
+
+        // Show browser notification
+        function showBrowserNotification(title, options) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                try {
+                    new Notification(title, {
+                        icon: '../ims/1110.png',
+                        badge: '../ims/1110.png',
+                        tag: 'booking-alert',
+                        requireInteraction: true,
+                        ...options
+                    });
+                } catch (e) {
+                    console.error('Error showing browser notification:', e);
+                }
+            }
+        }
+
+        // Request notification permission on load
+        function requestNotificationPermission() {
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
+        }
+
+        // Show popup alert for new booking
+        function showBookingAlert(booking) {
+            const alertDiv = document.createElement('div');
+            alertDiv.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                color: white;
+                padding: 20px 25px;
+                border-radius: 10px;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+                z-index: 10000;
+                max-width: 400px;
+                animation: slideIn 0.3s ease-out;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            `;
+
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes slideIn {
+                    from { 
+                        transform: translateX(500px);
+                        opacity: 0;
+                    }
+                    to { 
+                        transform: translateX(0);
+                        opacity: 1;
+                    }
+                }
+                @keyframes pulse {
+                    0%, 100% { transform: scale(1); }
+                    50% { transform: scale(1.1); }
+                }
+            `;
+            document.head.appendChild(style);
+
+            alertDiv.innerHTML = `
+                <div style="display: flex; align-items: flex-start; gap: 15px;">
+                    <div style="font-size: 28px; animation: pulse 1s infinite; flex-shrink: 0;">🔔</div>
+                    <div style="flex: 1;">
+                        <h3 style="margin: 0 0 8px 0; font-size: 1.1rem; font-weight: 700;">New Booking!</h3>
+                        <p style="margin: 0 0 5px 0; font-weight: 600;">${booking.name}</p>
+                        <p style="margin: 0 0 5px 0; font-size: 0.9rem; opacity: 0.95;">
+                            <i class="fas fa-map-marker-alt" style="margin-right: 5px;"></i>
+                            ${booking.pickup} → ${booking.destination}
+                        </p>
+                        <p style="margin: 0; font-size: 0.85rem; opacity: 0.85;">
+                            <i class="fas fa-clock" style="margin-right: 5px;"></i>
+                            ${booking.date} ${booking.time}
+                        </p>
+                    </div>
+                    <button onclick="this.parentElement.parentElement.remove()" style="
+                        background: rgba(255,255,255,0.3);
+                        border: none;
+                        color: white;
+                        width: 24px;
+                        height: 24px;
+                        border-radius: 50%;
+                        cursor: pointer;
+                        font-size: 14px;
+                        padding: 0;
+                        flex-shrink: 0;
+                    ">✕</button>
+                </div>
+            `;
+
+            document.body.appendChild(alertDiv);
+
+            // Auto-remove after 8 seconds
+            setTimeout(() => {
+                if (alertDiv.parentElement) {
+                    alertDiv.style.animation = 'slideIn 0.3s ease-out reverse';
+                    setTimeout(() => alertDiv.remove(), 300);
+                }
+            }, 8000);
+        }
 
         // Load bookings from server
         async function loadBookings() {
@@ -794,6 +928,27 @@
                 const newLatest = bookingsArr.reduce((m, b) => {
                     const t = Date.parse(b.createdAt || 0) || 0; return Math.max(m, t);
                 }, 0);
+                
+                // Check if there's a new booking since last check
+                if (newLatest > prevLatest && prevLatest > 0) {
+                    const newBookings = bookingsArr.filter(b => {
+                        const t = Date.parse(b.createdAt || 0) || 0;
+                        return t > prevLatest && b.status === 'pending';
+                    });
+                    
+                    // Alert for each new pending booking
+                    newBookings.forEach(booking => {
+                        if (booking._id !== lastNotifiedBookingId) {
+                            playNotificationSound();
+                            showBookingAlert(booking);
+                            showBrowserNotification(`New Booking from ${booking.name}`, {
+                                body: `${booking.pickup} → ${booking.destination}`
+                            });
+                            lastNotifiedBookingId = booking._id;
+                        }
+                    });
+                }
+                
                 window.__lastBookingTime = newLatest;
                 allBookings = bookingsArr;
                 // apply status filter if active
@@ -1073,12 +1228,38 @@
             // set initial active visual state (total)
             applyStatFilter(null);
 
+            // Request notification permission and wire sound toggle
+            requestNotificationPermission();
+            const soundToggleBtn = document.getElementById('soundToggleBtn');
+            if (soundToggleBtn) {
+                soundToggleBtn.addEventListener('click', () => {
+                    soundEnabled = !soundEnabled;
+                    localStorage.setItem('adminNotificationSound', soundEnabled ? 'on' : 'off');
+                    const label = document.getElementById('soundLabel');
+                    const icon = soundToggleBtn.querySelector('i');
+                    if (soundEnabled) {
+                        label.textContent = 'Sound On';
+                        icon.className = 'fas fa-volume-up';
+                        playNotificationSound(); // test beep
+                    } else {
+                        label.textContent = 'Sound Off';
+                        icon.className = 'fas fa-volume-mute';
+                    }
+                });
+                // Update button display based on stored preference
+                const label = document.getElementById('soundLabel');
+                const icon = soundToggleBtn.querySelector('i');
+                if (!soundEnabled) {
+                    label.textContent = 'Sound Off';
+                    icon.className = 'fas fa-volume-mute';
+                }
+            }
+
             // wire export and clear buttons safely
             const exportBtn = document.getElementById('exportBtn');
             const clearBtn = document.getElementById('clearBtn');
             if (exportBtn) exportBtn.addEventListener('click', exportBookings);
             if (clearBtn) clearBtn.addEventListener('click', clearAllBookings);
-            // wire enable sound button (default ON unless manually turned off)
             
         });
 
