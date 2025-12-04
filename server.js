@@ -606,7 +606,29 @@ app.post('/api/auth/login', async (req, res) => {
     console.log(`[AUTH] User found: ${user.name} (${user.role}), comparing password...`);
 
     // Compare password
-    const isMatch = await user.comparePassword(trimmedPassword);
+    let isMatch = false;
+    try {
+      isMatch = await user.comparePassword(trimmedPassword);
+    } catch (err) {
+      console.error('[AUTH] comparePassword error:', err && err.message ? err.message : err);
+      isMatch = false;
+    }
+
+    // Legacy fallback: if stored password was plaintext (older accounts), accept and migrate
+    if (!isMatch) {
+      try {
+        if (typeof user.password === 'string' && user.password === trimmedPassword) {
+          console.log('[AUTH] Legacy plaintext password match — migrating to bcrypt hash for user:', user._id);
+          // Trigger pre-save hook to hash the new password
+          user.password = trimmedPassword;
+          await user.save();
+          isMatch = true;
+        }
+      } catch (migrateErr) {
+        console.error('[AUTH] Error migrating plaintext password:', migrateErr && migrateErr.message ? migrateErr.message : migrateErr);
+      }
+    }
+
     if (!isMatch) {
       console.log(`[AUTH] Password mismatch for user: ${user.name}`);
       return res.status(401).json({ error: 'Invalid credentials' });
