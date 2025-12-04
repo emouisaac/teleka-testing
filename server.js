@@ -530,18 +530,54 @@ app.post('/api/auth/login', async (req, res) => {
       trimmedIdentifier.toLowerCase() === 'admin'
     )) {
       console.log('[AUTH] Master admin credentials provided — ensuring admin user exists');
+
+      // Try to find an existing admin first
       let admin = await User.findOne({ role: 'admin' });
+
+      // If no admin by role, try to find a user with the admin email/phone/name
       if (!admin) {
-        admin = new User({ name: adminName, phone: adminPhone, email: adminEmail, password: adminPass, role: 'admin' });
-        await admin.save();
-        console.log('[AUTH] Created admin user via master login:', { name: admin.name, email: admin.email, phone: admin.phone });
-      } else {
-        // ensure admin has expected contact info (do not override password if already hashed)
+        admin = await User.findOne({
+          $or: [
+            { email: adminEmail },
+            { phone: adminPhone },
+            { name: { $regex: `^${adminName}$`, $options: 'i' } }
+          ]
+        });
+      }
+
+      if (admin) {
+        // Promote existing user to admin and ensure contact fields are present
+        admin.role = 'admin';
         admin.email = admin.email || adminEmail;
         admin.phone = admin.phone || adminPhone;
         admin.name = admin.name || adminName;
-        await admin.save();
-        console.log('[AUTH] Found existing admin user for master login:', { name: admin.name, email: admin.email, phone: admin.phone });
+        // If password differs, overwrite so master pass always works (will be hashed by pre-save)
+        admin.password = admin.password ? admin.password : adminPass;
+        try {
+          await admin.save();
+          console.log('[AUTH] Promoted existing user to admin for master login:', { name: admin.name, email: admin.email, phone: admin.phone });
+        } catch (e) {
+          console.error('[AUTH] Error saving promoted admin user:', e.message);
+          // Continue — we'll still issue token if possible
+        }
+      } else {
+        // No matching user, create a new admin
+        admin = new User({ name: adminName, phone: adminPhone, email: adminEmail, password: adminPass, role: 'admin' });
+        try {
+          await admin.save();
+          console.log('[AUTH] Created admin user via master login:', { name: admin.name, email: admin.email, phone: admin.phone });
+        } catch (e) {
+          console.error('[AUTH] Error creating admin user via master login:', e.message);
+          // If duplicate key error occurs, try to find conflicting user and promote it
+          if (e.code === 11000) {
+            const conflict = await User.findOne({ $or: [{ email: adminEmail }, { phone: adminPhone }] });
+            if (conflict) {
+              conflict.role = 'admin';
+              conflict.name = conflict.name || adminName;
+              try { await conflict.save(); admin = conflict; console.log('[AUTH] Resolved duplicate by promoting conflicting user:', { id: conflict._id }); } catch (e2) { console.error('[AUTH] Failed to promote conflicting user:', e2.message); }
+            }
+          }
+        }
       }
 
       // Issue token for admin
@@ -615,15 +651,49 @@ async function ensureAdminExists() {
     
     if (!admin) {
       console.log('[STARTUP] Creating admin user...');
-      admin = new User({
-        name: adminName,
-        phone: adminPhone,
-        email: adminEmail,
-        password: adminPass,
-        role: 'admin'
+      // Try to find any user with the admin email/phone/name and promote them
+      admin = await User.findOne({
+        $or: [
+          { email: adminEmail },
+          { phone: adminPhone },
+          { name: { $regex: `^${adminName}$`, $options: 'i' } }
+        ]
       });
-      await admin.save();
-      console.log('[STARTUP] Admin user created:', { email: adminEmail, phone: adminPhone, name: adminName });
+
+      if (admin) {
+        admin.role = 'admin';
+        admin.email = admin.email || adminEmail;
+        admin.phone = admin.phone || adminPhone;
+        admin.name = admin.name || adminName;
+        // Do not overwrite password unless none exists
+        admin.password = admin.password ? admin.password : adminPass;
+        await admin.save();
+        console.log('[STARTUP] Promoted existing user to admin:', { email: admin.email, phone: admin.phone, name: admin.name });
+      } else {
+        admin = new User({
+          name: adminName,
+          phone: adminPhone,
+          email: adminEmail,
+          password: adminPass,
+          role: 'admin'
+        });
+        try {
+          await admin.save();
+          console.log('[STARTUP] Admin user created:', { email: adminEmail, phone: adminPhone, name: adminName });
+        } catch (e) {
+          console.error('[STARTUP] Failed creating admin; attempting to resolve duplicate:', e.message);
+          if (e.code === 11000) {
+            const conflict = await User.findOne({ $or: [{ email: adminEmail }, { phone: adminPhone }] });
+            if (conflict) {
+              conflict.role = 'admin';
+              conflict.name = conflict.name || adminName;
+              await conflict.save();
+              admin = conflict;
+              console.log('[STARTUP] Resolved duplicate by promoting conflicting user:', { id: conflict._id });
+            }
+          }
+        }
+      }
     } else {
       console.log('[STARTUP] Admin user already exists:', { email: admin.email, phone: admin.phone, name: admin.name });
     }
@@ -661,9 +731,42 @@ app.post('/api/maintenance/cleanup', async (req, res) => {
 
     let admin = await User.findOne({ role: 'admin' });
     if (!admin) {
-      admin = new User({ name: adminName, phone: adminPhone, email: adminEmail, password: adminPass, role: 'admin' });
-      await admin.save();
-      console.log('[MAINT] Created new admin user:', adminEmail, adminPhone);
+      // Try to find any user with the admin email/phone/name and promote them to admin
+      admin = await User.findOne({
+        $or: [
+          { email: adminEmail },
+          { phone: adminPhone },
+          { name: { $regex: `^${adminName}$`, $options: 'i' } }
+        ]
+      });
+
+      if (admin) {
+        admin.role = 'admin';
+        admin.email = admin.email || adminEmail;
+        admin.phone = admin.phone || adminPhone;
+        admin.name = admin.name || adminName;
+        admin.password = admin.password ? admin.password : adminPass;
+        await admin.save();
+        console.log('[MAINT] Promoted existing user to admin:', adminEmail, adminPhone);
+      } else {
+        admin = new User({ name: adminName, phone: adminPhone, email: adminEmail, password: adminPass, role: 'admin' });
+        try {
+          await admin.save();
+          console.log('[MAINT] Created new admin user:', adminEmail, adminPhone);
+        } catch (e) {
+          console.error('[MAINT] Error creating admin during cleanup:', e.message);
+          if (e.code === 11000) {
+            const conflict = await User.findOne({ $or: [{ email: adminEmail }, { phone: adminPhone }] });
+            if (conflict) {
+              conflict.role = 'admin';
+              conflict.name = conflict.name || adminName;
+              await conflict.save();
+              admin = conflict;
+              console.log('[MAINT] Resolved duplicate by promoting conflicting user:', { id: conflict._id });
+            }
+          }
+        }
+      }
     } else {
       // update admin password (will be hashed by pre-save)
       admin.password = adminPass;
